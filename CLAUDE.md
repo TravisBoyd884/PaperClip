@@ -285,6 +285,7 @@ Links user profiles to warehouses they manage. Used for admin panel authorizatio
 - **`check_match(swiper_woo_id, target_woo_id)`**: Called after every right-swipe to check if a reciprocal swipe exists. If so, creates a match.
 - **`burn_woo(woo_id)`**: Sets a Woo's status to `burned` during cash out. Validates the Woo is not in an active trade.
 - **`mint_woo(item_id, estimated_value)`**: Atomically creates a Woo from a verified item. Validates the item is in `verified` status, creates the Woo with data inherited from the item (name, description, photos, category), sets item status to `stored`, and increments `warehouses.current_count`. Runs as `SECURITY DEFINER`.
+- **`get_swipe_feed(user_id, swiper_woo_id, limit)`**: Returns swipeable Woos for the given user and swiper Woo. Filters to `active` Woos not owned by the user, excludes already-swiped targets, orders randomly, and joins owner profile data (username, avatar, is_agent). Runs as `SECURITY DEFINER`.
 
 ### 5.13 Row-Level Security (RLS) Policies
 
@@ -596,9 +597,9 @@ Pages marked with `*` are not yet implemented.
 | `/dashboard` | Implemented | Hexagonal Woo grid with overlay actions (View Details / Cash Out), compact user info bar, empty state |
 | `/intake` | Implemented | Intake request form, photo upload, shipping label, status tracking |
 | `/cashout` | Implemented | Cash out request (Woo selector + address), status tracking with timeline. Supports `?woo=` query param for pre-selection from dashboard |
-| `/swipe` | * | Tinder-style swipe interface for browsing Woos |
-| `/matches` | * | List of active matches with last message preview |
-| `/matches/:id` | * | Chat view for a specific match with trade proposal UI |
+| `/swipe` | Implemented | Tinder-style swipe interface: Woo selector, card stack with animated transitions, swipe buttons + keyboard shortcuts, "It's a Match!" modal |
+| `/matches` | Implemented | List of active matches with hex thumbnails, last message preview, counterparty info, time ago |
+| `/matches/:id` | Implemented | Real-time chat (Supabase Realtime Broadcast), trade proposal/approval cards, system messages, auto-scroll |
 | `/woos/:id` | Implemented | Woo detail page with image gallery, item condition, warehouse location, and Cash Out CTA |
 | `/settings` | * | Profile settings, agent key management, trading preferences |
 | `/settings/agents` | * | Create/revoke agent keys, set permissions, view agent activity logs |
@@ -755,8 +756,21 @@ paperclip/
 │   │   │   ├── cashout-form.tsx    # Cash out request dialog (Woo selector + address, supports preselection via ?woo= param)
 │   │   │   ├── cashout-list.tsx    # Cash out status list with timeline
 │   │   │   └── actions.ts          # Server actions: createCashout, getMyCashouts, getMyActiveWoos
-│   │   ├── swipe/                  # * Swipe feed
-│   │   ├── matches/                # * Match list and chat
+│   │   ├── swipe/
+│   │   │   ├── page.tsx            # Swipe page (auth check, load user Woos, empty state)
+│   │   │   ├── swipe-deck.tsx      # Client: Woo selector + card stack + swipe buttons + keyboard
+│   │   │   ├── swipe-card.tsx      # Animated swipe card (image, title, category, value, owner)
+│   │   │   ├── match-modal.tsx     # "It's a Match!" celebration dialog with hex Woo previews
+│   │   │   └── actions.ts          # Server actions: getSwipeFeed, recordSwipe, getMyActiveWoos
+│   │   ├── matches/
+│   │   │   ├── page.tsx            # Matches list page (auth check, empty state)
+│   │   │   ├── match-list.tsx      # Match cards with hex thumbnails, last message, time ago
+│   │   │   ├── [id]/
+│   │   │   │   ├── page.tsx        # Match chat page (auth + participant check)
+│   │   │   │   ├── chat-view.tsx   # Real-time chat with Supabase Realtime Broadcast
+│   │   │   │   └── trade-card.tsx  # Interactive trade proposal/approval card
+│   │   │   └── actions.ts          # Server actions: getMyMatches, getMatchDetails, getMessages,
+│   │   │                           #   sendMessage, proposeTrade, approveTrade, cancelTrade
 │   │   ├── woos/
 │   │   │   └── [id]/
 │   │   │       └── page.tsx        # Woo detail page (images, item info, warehouse, cash out CTA)
@@ -803,7 +817,8 @@ paperclip/
 │   ├── migrations/
 │   │   ├── 20250314000000_initial_schema.sql      # All tables, functions, RLS, indexes
 │   │   ├── 20250314000001_seed_warehouses.sql     # 3 seed warehouses
-│   │   └── 20250314000002_warehouse_staff.sql     # warehouse_staff table, admin RLS, mint_woo
+│   │   ├── 20250314000002_warehouse_staff.sql     # warehouse_staff table, admin RLS, mint_woo
+│   │   └── 20250314000003_swipe_feed_function.sql # get_swipe_feed() DB function
 │   └── seed.sql                    # Seed data (warehouses)
 ├── middleware.ts                   # Auth middleware (protects /dashboard, /admin, etc.)
 ├── CLAUDE.md                       # This file
@@ -819,17 +834,18 @@ paperclip/
 
 ### Phase 1: Foundation -- COMPLETE
 - Supabase project setup (database, auth, storage)
-- Database schema and migrations for all tables (3 migration files)
+- Database schema and migrations for all tables (4 migration files)
 - Supabase Auth integration with Next.js (email/password, Google, GitHub OAuth)
 - Basic layout and navigation with Shadcn
 - Middleware protecting authenticated routes
 
-### Phase 2: Core Trading
+### Phase 2: Core Trading -- COMPLETE
 - Woo display and management (CRUD)
-- Swipe feed and swipe mechanics
-- Match detection and match list
-- Chat interface with Supabase Realtime
-- Trade proposal, approval, and execution
+- Swipe feed and swipe mechanics (`/swipe` with card stack, animated transitions, keyboard shortcuts)
+- Match detection via `check_match()` DB function and match list (`/matches`)
+- Chat interface with Supabase Realtime Broadcast (`/matches/:id`)
+- Trade proposal, approval, and execution via `execute_trade()` DB function
+- `get_swipe_feed()` DB function for efficient feed queries
 
 ### Phase 3: Agent Integration
 - Agent key management (create, revoke, list)
