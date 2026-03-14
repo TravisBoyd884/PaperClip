@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { Package, LayoutDashboard, Repeat2, MessageSquare } from "lucide-react";
+import { Package, LayoutDashboard, Repeat2, MessageSquare, LogOut as LogOutIcon } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/intake", label: "Intake", icon: Package },
   { href: "/swipe", label: "Swipe", icon: Repeat2 },
   { href: "/matches", label: "Matches", icon: MessageSquare },
+  { href: "/cashout", label: "Cash Out", icon: LogOutIcon },
 ];
 
 export default function DashboardLayout({
