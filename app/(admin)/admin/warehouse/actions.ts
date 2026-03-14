@@ -80,13 +80,12 @@ export async function verifyItem(itemId: string) {
   return { success: true };
 }
 
-export async function mintWoo(itemId: string, estimatedValue?: number) {
+export async function mintWoo(itemId: string) {
   const { admin, warehouseIds } = await requireWarehouseStaff();
   await requireItemInWarehouse(admin, itemId, warehouseIds);
 
   const { data, error } = await admin.rpc("mint_woo", {
     p_item_id: itemId,
-    p_estimated_value: estimatedValue ?? null,
   });
 
   if (error) return { error: error.message };

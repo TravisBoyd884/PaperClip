@@ -10,8 +10,6 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -59,7 +57,6 @@ const CONDITION_LABELS: Record<string, string> = {
 function IntakeItemCard({ item }: { item: IntakeItem }) {
   const [loading, setLoading] = useState(false);
   const [mintDialogOpen, setMintDialogOpen] = useState(false);
-  const [estimatedValue, setEstimatedValue] = useState("");
   const badge = STATUS_BADGES[item.status] ?? STATUS_BADGES.in_transit;
 
   async function handleReceive() {
@@ -80,8 +77,7 @@ function IntakeItemCard({ item }: { item: IntakeItem }) {
 
   async function handleMint() {
     setLoading(true);
-    const value = estimatedValue ? parseFloat(estimatedValue) : undefined;
-    const result = await mintWoo(item.id, value);
+    const result = await mintWoo(item.id);
     setLoading(false);
     setMintDialogOpen(false);
     if (result.error) toast.error(result.error);
@@ -196,27 +192,10 @@ function IntakeItemCard({ item }: { item: IntakeItem }) {
               This will create a tradeable Woo and make it available on the platform.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="estimated-value">Estimated Value ($)</Label>
-              <Input
-                id="estimated-value"
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="Optional"
-                value={estimatedValue}
-                onChange={(e) => setEstimatedValue(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Used for sorting and filtering. Leave blank to skip.
-              </p>
-            </div>
-            <Button onClick={handleMint} disabled={loading} className="w-full">
-              <Sparkles className="mr-2 h-4 w-4" />
-              {loading ? "Minting..." : "Mint Woo"}
-            </Button>
-          </div>
+          <Button onClick={handleMint} disabled={loading} className="w-full">
+            <Sparkles className="mr-2 h-4 w-4" />
+            {loading ? "Minting..." : "Mint Woo"}
+          </Button>
         </DialogContent>
       </Dialog>
     </>

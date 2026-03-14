@@ -187,6 +187,21 @@ export function IntakeForm() {
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="estimatedValue">Estimated Value ($)</Label>
+            <Input
+              id="estimatedValue"
+              name="estimatedValue"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="Optional"
+            />
+            <p className="text-xs text-muted-foreground">
+              How much do you think this item is worth? Used for sorting and filtering.
+            </p>
+          </div>
+
+          <div className="space-y-2">
             <Label>Photos</Label>
             <div className="flex flex-wrap gap-2">
               {photos.map((photo, i) => (

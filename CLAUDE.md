@@ -148,6 +148,7 @@ The physical item record. One item corresponds to one Woo.
 | `verified` | `boolean` | Warehouse staff verified the item matches its description |
 | `status` | `text` | `requested`, `label_generated`, `in_transit`, `received`, `verified`, `stored`, `shipping_out`, `shipped` |
 | `category` | `text` | `office`, `electronics`, `furniture`, `collectible`, `other` |
+| `estimated_value` | `numeric` | Optional user-provided dollar estimate of the item's worth |
 | `shipping_label_url` | `text` | URL to the generated shipping label (nullable) |
 | `intake_tracking_number` | `text` | Mock tracking number for the intake shipment (nullable) |
 | `created_at` | `timestamptz` | |
@@ -284,7 +285,7 @@ Links user profiles to warehouses they manage. Used for admin panel authorizatio
 - **`execute_trade(trade_id)`**: Atomically swaps Woo ownership when both parties approve. Runs as a PostgreSQL function with `SECURITY DEFINER` to bypass RLS during the swap.
 - **`check_match(swiper_woo_id, target_woo_id)`**: Called after every right-swipe to check if a reciprocal swipe exists. If so, creates a match.
 - **`burn_woo(woo_id)`**: Sets a Woo's status to `burned` during cash out. Validates the Woo is not in an active trade.
-- **`mint_woo(item_id, estimated_value)`**: Atomically creates a Woo from a verified item. Validates the item is in `verified` status, creates the Woo with data inherited from the item (name, description, photos, category), sets item status to `stored`, and increments `warehouses.current_count`. Runs as `SECURITY DEFINER`.
+- **`mint_woo(item_id)`**: Atomically creates a Woo from a verified item. Validates the item is in `verified` status, creates the Woo with data inherited from the item (name, description, photos, category, estimated_value), sets item status to `stored`, and increments `warehouses.current_count`. Runs as `SECURITY DEFINER`.
 - **`get_swipe_feed(user_id, swiper_woo_id, limit)`**: Returns swipeable Woos for the given user and swiper Woo. Filters to `active` Woos not owned by the user, excludes already-swiped targets, orders randomly, and joins owner profile data (username, avatar, is_agent). Runs as `SECURITY DEFINER`.
 
 ### 5.13 Row-Level Security (RLS) Policies
@@ -639,7 +640,7 @@ Warehouse operations are fully implemented with a user-facing intake flow, cash 
 
 ### 10.1 Intake Process (User Side — `/intake`)
 
-1. User navigates to `/intake` and fills out an item description form (name, description, condition, category, photos).
+1. User navigates to `/intake` and fills out an item description form (name, description, condition, category, estimated value, photos).
 2. Photos are uploaded to the `item-photos` Supabase Storage bucket.
 3. PaperClip assigns the warehouse with the lowest `current_count` (server action via admin client).
 4. A mock shipping label URL and tracking number are generated.
@@ -654,7 +655,7 @@ Warehouse staff progress items through the following statuses:
 
 1. **`in_transit` -> `received`**: Staff clicks "Mark Received" when the physical item arrives.
 2. **`received` -> `verified`**: Staff clicks "Verify Item" after confirming the item matches its description and photos.
-3. **`verified` -> `stored`**: Staff clicks "Mint Woo" which calls the `mint_woo` database function. This atomically creates a Woo (inheriting title, description, images, category from the item), sets item status to `stored`, and increments `warehouses.current_count`. Staff can optionally set an `estimated_value` during minting.
+3. **`verified` -> `stored`**: Staff clicks "Mint Woo" which calls the `mint_woo` database function. This atomically creates a Woo (inheriting title, description, images, category, and estimated_value from the item), sets item status to `stored`, and increments `warehouses.current_count`.
 
 ### 10.3 Cash Out Process (User Side — `/cashout`)
 
@@ -818,7 +819,8 @@ paperclip/
 │   │   ├── 20250314000000_initial_schema.sql      # All tables, functions, RLS, indexes
 │   │   ├── 20250314000001_seed_warehouses.sql     # 3 seed warehouses
 │   │   ├── 20250314000002_warehouse_staff.sql     # warehouse_staff table, admin RLS, mint_woo
-│   │   └── 20250314000003_swipe_feed_function.sql # get_swipe_feed() DB function
+│   │   ├── 20250314000003_swipe_feed_function.sql # get_swipe_feed() DB function
+│   │   └── 20250314000004_user_estimated_value.sql # Move estimated_value from admin mint to user intake
 │   └── seed.sql                    # Seed data (warehouses)
 ├── middleware.ts                   # Auth middleware (protects /dashboard, /admin, etc.)
 ├── CLAUDE.md                       # This file

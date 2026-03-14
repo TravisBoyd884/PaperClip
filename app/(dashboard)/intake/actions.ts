@@ -31,6 +31,8 @@ export async function createIntake(formData: FormData) {
   const condition = formData.get("condition") as string;
   const category = formData.get("category") as string;
   const photoUrls = formData.getAll("photoUrls") as string[];
+  const estimatedValueRaw = formData.get("estimatedValue") as string;
+  const estimatedValue = estimatedValueRaw ? parseFloat(estimatedValueRaw) : null;
 
   if (!name?.trim()) {
     return { error: "Item name is required" };
@@ -67,6 +69,7 @@ export async function createIntake(formData: FormData) {
       condition,
       category: category || "other",
       photos: photoUrls.filter(Boolean),
+      estimated_value: estimatedValue,
       status: "label_generated",
       shipping_label_url: labelUrl,
       intake_tracking_number: trackingNumber,
