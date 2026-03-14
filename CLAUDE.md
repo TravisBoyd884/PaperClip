@@ -50,7 +50,7 @@ User requests intake
   -> User can now trade
 ```
 
-**States for an intake**: `requested` -> `label_generated` -> `shipped` -> `received` -> `verified` -> `woo_minted`
+**States for an intake (item status)**: `requested` -> `label_generated` -> `in_transit` -> `received` -> `verified` -> `stored`
 
 ### 3.2 Trading Flow
 
@@ -146,7 +146,10 @@ The physical item record. One item corresponds to one Woo.
 | `condition` | `text` | `new`, `like_new`, `good`, `fair`, `poor` |
 | `photos` | `text[]` | Array of Supabase Storage URLs |
 | `verified` | `boolean` | Warehouse staff verified the item matches its description |
-| `status` | `text` | `in_transit`, `received`, `verified`, `stored`, `shipping_out`, `shipped` |
+| `status` | `text` | `requested`, `label_generated`, `in_transit`, `received`, `verified`, `stored`, `shipping_out`, `shipped` |
+| `category` | `text` | `office`, `electronics`, `furniture`, `collectible`, `other` |
+| `shipping_label_url` | `text` | URL to the generated shipping label (nullable) |
+| `intake_tracking_number` | `text` | Mock tracking number for the intake shipment (nullable) |
 | `created_at` | `timestamptz` | |
 
 ### 5.4 `woos`
@@ -262,13 +265,28 @@ API keys for agent authentication.
 | `last_used_at` | `timestamptz` | |
 | `created_at` | `timestamptz` | |
 
-### 5.11 Key Database Functions
+### 5.11 `warehouse_staff`
+
+Links user profiles to warehouses they manage. Used for admin panel authorization.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `uuid` PK | |
+| `profile_id` | `uuid` FK | References `profiles(id)` |
+| `warehouse_id` | `uuid` FK | References `warehouses(id)` |
+| `role` | `text` | `staff` or `manager` |
+| `created_at` | `timestamptz` | |
+
+**Unique constraint**: `(profile_id, warehouse_id)` -- a user can only have one role per warehouse.
+
+### 5.12 Key Database Functions
 
 - **`execute_trade(trade_id)`**: Atomically swaps Woo ownership when both parties approve. Runs as a PostgreSQL function with `SECURITY DEFINER` to bypass RLS during the swap.
 - **`check_match(swiper_woo_id, target_woo_id)`**: Called after every right-swipe to check if a reciprocal swipe exists. If so, creates a match.
 - **`burn_woo(woo_id)`**: Sets a Woo's status to `burned` during cash out. Validates the Woo is not in an active trade.
+- **`mint_woo(item_id, estimated_value)`**: Atomically creates a Woo from a verified item. Validates the item is in `verified` status, creates the Woo with data inherited from the item (name, description, photos, category), sets item status to `stored`, and increments `warehouses.current_count`. Runs as `SECURITY DEFINER`.
 
-### 5.12 Row-Level Security (RLS) Policies
+### 5.13 Row-Level Security (RLS) Policies
 
 All tables have RLS enabled. Key policies:
 
@@ -277,7 +295,10 @@ All tables have RLS enabled. Key policies:
 - Users can only create swipes from their own Woos.
 - Agent keys are only visible to the owning user.
 - Trade approval can only be set by the respective participant.
-- Warehouse and item data is read-only for regular users; warehouse staff have a separate admin role.
+- Warehouse data is read-only for regular users.
+- Warehouse staff can read and update items and cashouts in their assigned warehouse.
+- Warehouse staff can read their own staff records.
+- Admin server actions use the service-role client to bypass RLS for warehouse operations (after verifying staff membership).
 
 ---
 
@@ -566,20 +587,25 @@ All Supabase tables have RLS enabled. Policies ensure:
 
 ### 9.1 Pages and Layout
 
-| Page | Description |
-|---|---|
-| `/` | Landing page with value proposition, how-it-works, and CTA to sign up |
-| `/auth` | Sign in / sign up with Supabase Auth |
-| `/dashboard` | Overview: owned Woos, active matches, recent trades, cash out status |
-| `/swipe` | Tinder-style swipe interface for browsing Woos |
-| `/matches` | List of active matches with last message preview |
-| `/matches/:id` | Chat view for a specific match with trade proposal UI |
-| `/woos/:id` | Detailed Woo view with trade history and current owner |
-| `/intake` | Request form to send in a new item, warehouse assignment, shipping label |
-| `/cashout` | Request cash out for a Woo, enter shipping address, track status |
-| `/settings` | Profile settings, agent key management, trading preferences |
-| `/settings/agents` | Create/revoke agent keys, set permissions, view agent activity logs |
-| `/admin/warehouse` | (Admin) Warehouse staff panel for intake verification and shipment management |
+Pages marked with `*` are not yet implemented.
+
+| Page | Status | Description |
+|---|---|---|
+| `/` | Implemented | Landing page with value proposition and CTA to sign up |
+| `/auth` | Implemented | Sign in / sign up with Supabase Auth (email, Google, GitHub) |
+| `/dashboard` | Implemented | User info and sign out (will expand with Woo/match/trade summaries) |
+| `/intake` | Implemented | Intake request form, photo upload, shipping label, status tracking |
+| `/cashout` | Implemented | Cash out request (Woo selector + address), status tracking with timeline |
+| `/swipe` | * | Tinder-style swipe interface for browsing Woos |
+| `/matches` | * | List of active matches with last message preview |
+| `/matches/:id` | * | Chat view for a specific match with trade proposal UI |
+| `/woos/:id` | * | Detailed Woo view with trade history and current owner |
+| `/settings` | * | Profile settings, agent key management, trading preferences |
+| `/settings/agents` | * | Create/revoke agent keys, set permissions, view agent activity logs |
+| `/admin/warehouse` | Implemented | Admin overview: pending intakes, stored items, cash outs, capacity usage |
+| `/admin/warehouse/intakes` | Implemented | Intake processing: receive, verify, mint Woo |
+| `/admin/warehouse/inventory` | Implemented | Searchable/filterable table of stored items with Woo details |
+| `/admin/warehouse/cashouts` | Implemented | Cash out processing: pull, ship (with tracking), deliver, complete |
 
 ### 9.2 Swipe Interface
 
@@ -608,31 +634,60 @@ All Supabase tables have RLS enabled. Policies ensure:
 
 ## 10. Warehouse Operations
 
-> Warehouse operations are specified here for completeness but are **out of scope for the initial MVP**. The MVP will seed the database with mock warehouses and items.
+Warehouse operations are fully implemented with a user-facing intake flow, cash out flow, shipping label API, and an admin panel for warehouse staff.
 
-### 10.1 Intake Process
+### 10.1 Intake Process (User Side — `/intake`)
 
-1. User navigates to `/intake` and fills out an item description form (name, description, condition, photos).
-2. PaperClip assigns the nearest warehouse with available capacity.
-3. A shipping label is generated (integration with a shipping API like EasyPost or Shippo).
-4. User ships the item.
-5. Warehouse staff receives the item, verifies it against the description, and marks it as `verified`.
-6. A Woo is minted and the user is notified.
+1. User navigates to `/intake` and fills out an item description form (name, description, condition, category, photos).
+2. Photos are uploaded to the `item-photos` Supabase Storage bucket.
+3. PaperClip assigns the warehouse with the lowest `current_count` (server action via admin client).
+4. A mock shipping label URL and tracking number are generated.
+5. User clicks "I've Shipped This Item" to move the item status from `label_generated` to `in_transit`.
+6. From here, warehouse staff processes the item via the admin panel (see 10.3).
 
-### 10.2 Cash Out Process
+**Shipping label**: Served at `/api/shipping-label` as a printable HTML page. Accepts `?warehouse=` and optionally `?itemId=` query params. Displays warehouse address, item name, a mock barcode, and tracking number.
 
-1. User navigates to `/cashout`, selects a Woo, and provides a shipping address.
-2. PaperClip validates the Woo is `active` (not in a trade or already cashed out).
-3. The warehouse pulls the physical item from storage.
-4. The warehouse ships the item and enters the tracking number.
-5. The Woo's status is set to `burned` and it is removed from the swipe feed.
-6. User can track shipment status from the dashboard.
+### 10.2 Intake Process (Admin Side — `/admin/warehouse/intakes`)
 
-### 10.3 Admin Panel
+Warehouse staff progress items through the following statuses:
 
-- Warehouse staff access a protected admin panel at `/admin/warehouse`.
-- Features: view pending intakes, verify items, manage inventory, process cash outs, enter tracking numbers.
-- Separate Supabase role with elevated RLS permissions.
+1. **`in_transit` -> `received`**: Staff clicks "Mark Received" when the physical item arrives.
+2. **`received` -> `verified`**: Staff clicks "Verify Item" after confirming the item matches its description and photos.
+3. **`verified` -> `stored`**: Staff clicks "Mint Woo" which calls the `mint_woo` database function. This atomically creates a Woo (inheriting title, description, images, category from the item), sets item status to `stored`, and increments `warehouses.current_count`. Staff can optionally set an `estimated_value` during minting.
+
+### 10.3 Cash Out Process (User Side — `/cashout`)
+
+1. User navigates to `/cashout` and clicks "Request Cash Out".
+2. User selects one of their `active` Woos from a dropdown and enters a shipping address (street, city, state, zip, country).
+3. On submission, the Woo status is set to `cashed_out` and a `cashouts` record is created with status `requested`.
+4. User can track their cash out progress via an expandable card with a 5-step timeline (requested -> processing -> shipped -> delivered -> completed).
+5. Once shipped, the tracking number and carrier are displayed.
+
+### 10.4 Cash Out Process (Admin Side — `/admin/warehouse/cashouts`)
+
+Warehouse staff progress cash outs through the following statuses:
+
+1. **`requested` -> `processing`**: Staff clicks "Start Processing" to indicate the item is being pulled from storage.
+2. **`processing` -> `shipped`**: Staff clicks "Ship Item", enters a carrier and tracking number. This burns the Woo (via `burn_woo` function), sets item status to `shipping_out`, and decrements `warehouses.current_count`.
+3. **`shipped` -> `delivered`**: Staff clicks "Mark Delivered" and item status moves to `shipped`.
+4. **`delivered` -> `completed`**: Staff clicks "Complete" to finalize the cash out.
+
+### 10.5 Admin Panel (`/admin/warehouse`)
+
+The admin panel is a separate route group (`app/(admin)/`) with its own layout, navigation, and authorization.
+
+**Authorization**: The layout is a server component that queries `warehouse_staff` for the current user. If no staff record exists, the user is redirected to `/dashboard`. The middleware protects `/admin` routes from unauthenticated users.
+
+**Pages**:
+
+| Route | Description |
+|---|---|
+| `/admin/warehouse` | Overview dashboard with stats cards: pending intakes, stored items, pending cash outs, capacity usage bar |
+| `/admin/warehouse/intakes` | Lists items in `in_transit`, `received`, `verified` status with action buttons per status |
+| `/admin/warehouse/inventory` | Filterable/searchable data table of all `stored` items with linked Woo details (status, trade count, estimated value, current owner) |
+| `/admin/warehouse/cashouts` | Lists cashout requests with status progression buttons and a ship dialog for entering tracking/carrier info |
+
+**Server actions**: All admin mutations (in `app/(admin)/admin/warehouse/actions.ts`) verify the user is authenticated, confirm warehouse staff membership via the service-role client, then perform operations using the admin client to bypass RLS.
 
 ---
 
@@ -672,93 +727,98 @@ AGENT_KEY_SALT=
 
 ---
 
-## 13. Project Structure (Planned)
+## 13. Project Structure
+
+Files marked with `*` are not yet implemented (planned for future phases).
 
 ```
 paperclip/
 ├── app/
 │   ├── (auth)/
+│   │   ├── layout.tsx              # Centered auth layout
 │   │   └── auth/
-│   │       └── page.tsx
+│   │       └── page.tsx            # Sign in / sign up
 │   ├── (dashboard)/
+│   │   ├── layout.tsx              # Dashboard nav layout (Dashboard, Intake, Swipe, Matches, Cash Out)
 │   │   ├── dashboard/
-│   │   │   └── page.tsx
-│   │   ├── swipe/
-│   │   │   └── page.tsx
-│   │   ├── matches/
-│   │   │   ├── page.tsx
-│   │   │   └── [id]/
-│   │   │       └── page.tsx
+│   │   │   ├── page.tsx            # User dashboard
+│   │   │   └── sign-out-button.tsx
 │   │   ├── intake/
-│   │   │   └── page.tsx
+│   │   │   ├── page.tsx            # Intake list + form trigger
+│   │   │   ├── intake-form.tsx     # New intake dialog
+│   │   │   ├── intake-list.tsx     # Intake items with status timeline
+│   │   │   └── actions.ts          # Server actions: createIntake, markAsShipped, uploadPhoto
 │   │   ├── cashout/
-│   │   │   └── page.tsx
-│   │   ├── woos/
-│   │   │   └── [id]/
-│   │   │       └── page.tsx
-│   │   └── settings/
-│   │       ├── page.tsx
-│   │       └── agents/
-│   │           └── page.tsx
+│   │   │   ├── page.tsx            # Cash out page
+│   │   │   ├── cashout-form.tsx    # Cash out request dialog (Woo selector + address)
+│   │   │   ├── cashout-list.tsx    # Cash out status list with timeline
+│   │   │   └── actions.ts          # Server actions: createCashout, getMyCashouts, getMyActiveWoos
+│   │   ├── swipe/                  # * Swipe feed
+│   │   ├── matches/                # * Match list and chat
+│   │   ├── woos/                   # * Woo detail view
+│   │   └── settings/               # * Profile and agent key settings
 │   ├── (admin)/
+│   │   ├── layout.tsx              # Admin layout with staff auth check and nav
 │   │   └── admin/
 │   │       └── warehouse/
-│   │           └── page.tsx
+│   │           ├── page.tsx        # Overview dashboard (stats cards, capacity bar)
+│   │           ├── actions.ts      # All admin server actions + data fetching
+│   │           ├── intakes/
+│   │           │   ├── page.tsx    # Pending intakes list
+│   │           │   └── intake-item-list.tsx  # Item cards with Receive/Verify/Mint buttons
+│   │           ├── inventory/
+│   │           │   ├── page.tsx    # Inventory page
+│   │           │   └── inventory-table.tsx   # Filterable data table
+│   │           └── cashouts/
+│   │               ├── page.tsx    # Cash out processing
+│   │               └── cashout-list.tsx      # Cashout cards with ship dialog
 │   ├── api/
-│   │   ├── v1/
-│   │   │   ├── woos/
-│   │   │   ├── swipes/
-│   │   │   ├── matches/
-│   │   │   ├── trades/
-│   │   │   ├── cashouts/
-│   │   │   └── agent-keys/
-│   │   └── mcp/
-│   │       └── route.ts
-│   ├── .well-known/
-│   │   └── agent.json/
-│   │       └── route.ts
-│   ├── layout.tsx
-│   ├── page.tsx
-│   └── globals.css
+│   │   ├── shipping-label/
+│   │   │   └── route.ts           # Mock shipping label HTML endpoint
+│   │   ├── v1/                     # * REST API endpoints
+│   │   └── mcp/                    # * MCP server
+│   ├── auth/
+│   │   └── callback/
+│   │       └── route.ts           # OAuth callback handler
+│   ├── .well-known/                # * A2A Agent Card
+│   ├── layout.tsx                  # Root layout
+│   ├── page.tsx                    # Landing page
+│   └── globals.css                 # Theme (light/dark)
 ├── components/
-│   ├── ui/              # Shadcn components
-│   ├── swipe-card.tsx
-│   ├── chat-window.tsx
-│   ├── trade-proposal.tsx
-│   ├── woo-card.tsx
-│   └── agent-badge.tsx
+│   └── ui/                         # Shadcn components (avatar, badge, button, card, dialog,
+│                                   #   dropdown-menu, input, label, select, separator, sonner,
+│                                   #   table, tabs, textarea, tooltip)
 ├── lib/
 │   ├── supabase/
-│   │   ├── client.ts     # Browser Supabase client
-│   │   ├── server.ts     # Server Supabase client
-│   │   └── middleware.ts  # Auth middleware
-│   ├── mcp/
-│   │   ├── server.ts     # MCP server setup
-│   │   └── tools.ts      # MCP tool definitions
-│   ├── agents/
-│   │   ├── auth.ts       # Agent key validation
-│   │   └── rate-limit.ts # Rate limiting logic
-│   └── utils.ts
+│   │   ├── client.ts               # Browser Supabase client
+│   │   ├── server.ts               # Server Supabase client (cookie-based)
+│   │   └── admin.ts                # Service-role client (bypasses RLS)
+│   └── utils.ts                    # cn() helper
 ├── supabase/
-│   ├── migrations/       # SQL migration files
-│   └── seed.sql          # Seed data for development
-├── public/
-├── CLAUDE.md             # This file
+│   ├── config.toml                 # Supabase CLI config
+│   ├── migrations/
+│   │   ├── 20250314000000_initial_schema.sql      # All tables, functions, RLS, indexes
+│   │   ├── 20250314000001_seed_warehouses.sql     # 3 seed warehouses
+│   │   └── 20250314000002_warehouse_staff.sql     # warehouse_staff table, admin RLS, mint_woo
+│   └── seed.sql                    # Seed data (warehouses)
+├── middleware.ts                   # Auth middleware (protects /dashboard, /admin, etc.)
+├── CLAUDE.md                       # This file
 ├── package.json
 ├── next.config.ts
 ├── tsconfig.json
-└── .env.local
+└── .env
 ```
 
 ---
 
 ## 14. Development Phases
 
-### Phase 1: Foundation
+### Phase 1: Foundation -- COMPLETE
 - Supabase project setup (database, auth, storage)
-- Database schema and migrations for all tables
-- Supabase Auth integration with Next.js
+- Database schema and migrations for all tables (3 migration files)
+- Supabase Auth integration with Next.js (email/password, Google, GitHub OAuth)
 - Basic layout and navigation with Shadcn
+- Middleware protecting authenticated routes
 
 ### Phase 2: Core Trading
 - Woo display and management (CRUD)
@@ -775,14 +835,16 @@ paperclip/
 - A2A Agent Card
 - Rate limiting and safety controls
 
-### Phase 4: Warehouse and Cash Out
-- Intake request flow
-- Cash out request flow
-- Warehouse admin panel
-- Shipping integration (future)
+### Phase 4: Warehouse and Cash Out -- COMPLETE
+- Intake request flow (user-facing form, photo upload, warehouse assignment, shipping label)
+- Cash out request flow (Woo selector, shipping address, status tracking)
+- Warehouse admin panel (overview, intakes, inventory, cash outs)
+- `warehouse_staff` table and RLS for admin authorization
+- `mint_woo` database function for atomic Woo creation
+- Mock shipping label API at `/api/shipping-label`
 
 ### Phase 5: Polish
-- Landing page
+- Landing page (basic version exists)
 - Responsive design pass
 - Error handling and loading states
 - Performance optimization
