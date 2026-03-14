@@ -3,7 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 import { CashoutForm } from "./cashout-form";
 import { CashoutStatusList } from "./cashout-list";
 
-export default async function CashoutPage() {
+export default async function CashoutPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ woo?: string }>;
+}) {
+  const { woo: preselectedWooId } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -37,7 +42,7 @@ export default async function CashoutPage() {
             Convert a Woo back to its physical item. We&apos;ll ship it to you.
           </p>
         </div>
-        <CashoutForm woos={activeWoos} />
+        <CashoutForm woos={activeWoos} preselectedWooId={preselectedWooId} />
       </div>
       <CashoutStatusList cashouts={cashouts} />
     </div>

@@ -30,10 +30,17 @@ type Woo = {
   estimated_value: number | null;
 };
 
-export function CashoutForm({ woos }: { woos: Woo[] }) {
-  const [open, setOpen] = useState(false);
+export function CashoutForm({
+  woos,
+  preselectedWooId,
+}: {
+  woos: Woo[];
+  preselectedWooId?: string;
+}) {
+  const hasPreselection = !!preselectedWooId && woos.some((w) => w.id === preselectedWooId);
+  const [open, setOpen] = useState(hasPreselection);
   const [loading, setLoading] = useState(false);
-  const [selectedWoo, setSelectedWoo] = useState("");
+  const [selectedWoo, setSelectedWoo] = useState(hasPreselection ? preselectedWooId! : "");
   const [street, setStreet] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");

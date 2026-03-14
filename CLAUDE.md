@@ -593,13 +593,13 @@ Pages marked with `*` are not yet implemented.
 |---|---|---|
 | `/` | Implemented | Landing page with value proposition and CTA to sign up |
 | `/auth` | Implemented | Sign in / sign up with Supabase Auth (email, Google, GitHub) |
-| `/dashboard` | Implemented | User info and sign out (will expand with Woo/match/trade summaries) |
+| `/dashboard` | Implemented | Hexagonal Woo grid with overlay actions (View Details / Cash Out), compact user info bar, empty state |
 | `/intake` | Implemented | Intake request form, photo upload, shipping label, status tracking |
-| `/cashout` | Implemented | Cash out request (Woo selector + address), status tracking with timeline |
+| `/cashout` | Implemented | Cash out request (Woo selector + address), status tracking with timeline. Supports `?woo=` query param for pre-selection from dashboard |
 | `/swipe` | * | Tinder-style swipe interface for browsing Woos |
 | `/matches` | * | List of active matches with last message preview |
 | `/matches/:id` | * | Chat view for a specific match with trade proposal UI |
-| `/woos/:id` | * | Detailed Woo view with trade history and current owner |
+| `/woos/:id` | Implemented | Woo detail page with image gallery, item condition, warehouse location, and Cash Out CTA |
 | `/settings` | * | Profile settings, agent key management, trading preferences |
 | `/settings/agents` | * | Create/revoke agent keys, set permissions, view agent activity logs |
 | `/admin/warehouse` | Implemented | Admin overview: pending intakes, stored items, cash outs, capacity usage |
@@ -657,8 +657,8 @@ Warehouse staff progress items through the following statuses:
 
 ### 10.3 Cash Out Process (User Side — `/cashout`)
 
-1. User navigates to `/cashout` and clicks "Request Cash Out".
-2. User selects one of their `active` Woos from a dropdown and enters a shipping address (street, city, state, zip, country).
+1. User navigates to `/cashout` and clicks "Request Cash Out". Alternatively, user clicks "Cash Out" on a Woo in the dashboard hex grid or the `/woos/:id` detail page, which navigates to `/cashout?woo=[id]` with the Woo pre-selected and the dialog auto-opened.
+2. User selects one of their `active` Woos from a dropdown (or confirms the pre-selected Woo) and enters a shipping address (street, city, state, zip, country).
 3. On submission, the Woo status is set to `cashed_out` and a `cashouts` record is created with status `requested`.
 4. User can track their cash out progress via an expandable card with a 5-step timeline (requested -> processing -> shipped -> delivered -> completed).
 5. Once shipped, the tracking number and carrier are displayed.
@@ -741,8 +741,10 @@ paperclip/
 │   ├── (dashboard)/
 │   │   ├── layout.tsx              # Dashboard nav layout (Dashboard, Intake, Swipe, Matches, Cash Out)
 │   │   ├── dashboard/
-│   │   │   ├── page.tsx            # User dashboard
-│   │   │   └── sign-out-button.tsx
+│   │   │   ├── page.tsx            # User dashboard (hex Woo grid, compact user bar)
+│   │   │   ├── sign-out-button.tsx
+│   │   │   ├── woo-grid.tsx        # Hexagonal Woo card grid with click-to-overlay
+│   │   │   └── woo-overlay.tsx     # Dialog overlay with View Details / Cash Out actions
 │   │   ├── intake/
 │   │   │   ├── page.tsx            # Intake list + form trigger
 │   │   │   ├── intake-form.tsx     # New intake dialog
@@ -750,12 +752,14 @@ paperclip/
 │   │   │   └── actions.ts          # Server actions: createIntake, markAsShipped, uploadPhoto
 │   │   ├── cashout/
 │   │   │   ├── page.tsx            # Cash out page
-│   │   │   ├── cashout-form.tsx    # Cash out request dialog (Woo selector + address)
+│   │   │   ├── cashout-form.tsx    # Cash out request dialog (Woo selector + address, supports preselection via ?woo= param)
 │   │   │   ├── cashout-list.tsx    # Cash out status list with timeline
 │   │   │   └── actions.ts          # Server actions: createCashout, getMyCashouts, getMyActiveWoos
 │   │   ├── swipe/                  # * Swipe feed
 │   │   ├── matches/                # * Match list and chat
-│   │   ├── woos/                   # * Woo detail view
+│   │   ├── woos/
+│   │   │   └── [id]/
+│   │   │       └── page.tsx        # Woo detail page (images, item info, warehouse, cash out CTA)
 │   │   └── settings/               # * Profile and agent key settings
 │   ├── (admin)/
 │   │   ├── layout.tsx              # Admin layout with staff auth check and nav
