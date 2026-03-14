@@ -68,6 +68,12 @@ User browses the swipe feed (Woos from other users)
 
 **Trade states**: `pending` -> `approved_by_a` | `approved_by_b` -> `completed` | `cancelled`
 
+**Trade availability validation** (defense-in-depth):
+- **Database layer** (`execute_trade()`): Before swapping ownership, locks both Woos and verifies they are still `active` and owned by the expected match participants. Auto-cancels the trade and match if validation fails.
+- **Server action layer** (`proposeTrade()`, `approveTrade()`): Checks Woo status and ownership before creating or approving a trade. Auto-cancels the match (and trade, if applicable) and returns a user-facing error if a Woo is unavailable.
+- **Match list cleanup** (`invalidateUnavailableMatches()`): Called when loading matches; cancels any active/proposed match where either Woo is no longer `active` or has changed owners, along with any pending trades on those matches.
+- **Match creation** (`check_match()`): Verifies both Woos are `active` before creating a match from a reciprocal swipe.
+
 ### 3.3 Cash Out Flow
 
 ```
@@ -282,8 +288,8 @@ Links user profiles to warehouses they manage. Used for admin panel authorizatio
 
 ### 5.12 Key Database Functions
 
-- **`execute_trade(trade_id)`**: Atomically swaps Woo ownership when both parties approve. Runs as a PostgreSQL function with `SECURITY DEFINER` to bypass RLS during the swap.
-- **`check_match(swiper_woo_id, target_woo_id)`**: Called after every right-swipe to check if a reciprocal swipe exists. If so, creates a match.
+- **`execute_trade(trade_id)`**: Atomically swaps Woo ownership when both parties approve. Locks both Woos with `FOR UPDATE`, verifies both are `active` and still owned by the match participants, then swaps. Auto-cancels trade and match if validation fails. Runs as `SECURITY DEFINER`.
+- **`check_match(swiper_woo_id, target_woo_id)`**: Called after every right-swipe to check if a reciprocal swipe exists. Verifies both Woos are `active` before creating a match; returns null if either Woo is unavailable.
 - **`burn_woo(woo_id)`**: Sets a Woo's status to `burned` during cash out. Validates the Woo is not in an active trade.
 - **`mint_woo(item_id)`**: Atomically creates a Woo from a verified item. Validates the item is in `verified` status, creates the Woo with data inherited from the item (name, description, photos, category, estimated_value), sets item status to `stored`, and increments `warehouses.current_count`. Runs as `SECURITY DEFINER`.
 - **`get_swipe_feed(user_id, swiper_woo_id, limit)`**: Returns swipeable Woos for the given user and swiper Woo. Filters to `active` Woos not owned by the user, excludes already-swiped targets, orders randomly, and joins owner profile data (username, avatar, is_agent). Runs as `SECURITY DEFINER`.
@@ -848,6 +854,7 @@ paperclip/
 - Chat interface with Supabase Realtime Broadcast (`/matches/:id`)
 - Trade proposal, approval, and execution via `execute_trade()` DB function
 - `get_swipe_feed()` DB function for efficient feed queries
+- Trade availability validation: defense-in-depth checks across DB functions, server actions, and match list to prevent trades on Woos that have been traded away or cashed out
 
 ### Phase 3: Agent Integration
 - Agent key management (create, revoke, list)

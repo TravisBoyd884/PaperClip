@@ -69,6 +69,58 @@ export type MessageInfo = {
   sender: MatchProfile;
 };
 
+async function invalidateUnavailableMatches(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+) {
+  const { data: openMatches } = await supabase
+    .from("matches")
+    .select("id, woo_a_id, woo_b_id, user_a_id, user_b_id")
+    .in("status", ["active", "trade_proposed"])
+    .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`);
+
+  if (!openMatches?.length) return;
+
+  const wooIds = [
+    ...new Set(openMatches.flatMap((m) => [m.woo_a_id, m.woo_b_id])),
+  ];
+
+  const { data: woos } = await supabase
+    .from("woos")
+    .select("id, status, owner_id")
+    .in("id", wooIds);
+
+  if (!woos) return;
+
+  const wooMap = new Map(woos.map((w) => [w.id, w]));
+
+  const staleMatchIds: string[] = [];
+  for (const m of openMatches) {
+    const wA = wooMap.get(m.woo_a_id);
+    const wB = wooMap.get(m.woo_b_id);
+    if (
+      !wA || !wB ||
+      wA.status !== "active" || wB.status !== "active" ||
+      wA.owner_id !== m.user_a_id || wB.owner_id !== m.user_b_id
+    ) {
+      staleMatchIds.push(m.id);
+    }
+  }
+
+  if (!staleMatchIds.length) return;
+
+  await supabase
+    .from("trades")
+    .update({ status: "cancelled" })
+    .in("match_id", staleMatchIds)
+    .eq("status", "pending");
+
+  await supabase
+    .from("matches")
+    .update({ status: "cancelled" })
+    .in("id", staleMatchIds);
+}
+
 export async function getMyMatches(): Promise<{
   data: MatchSummary[];
   userId?: string;
@@ -80,6 +132,8 @@ export async function getMyMatches(): Promise<{
   } = await supabase.auth.getUser();
 
   if (!user) return { data: [], error: "Not authenticated" };
+
+  await invalidateUnavailableMatches(supabase, user.id);
 
   const { data: matches, error } = await supabase
     .from("matches")
@@ -370,6 +424,30 @@ export async function proposeTrade(
     return { data: null, error: "A trade is already pending for this match" };
   }
 
+  const { data: woos } = await supabase
+    .from("woos")
+    .select("id, status, owner_id")
+    .in("id", [match.woo_a_id, match.woo_b_id]);
+
+  const wooA = woos?.find((w) => w.id === match.woo_a_id);
+  const wooB = woos?.find((w) => w.id === match.woo_b_id);
+
+  if (
+    !wooA || !wooB ||
+    wooA.status !== "active" || wooB.status !== "active" ||
+    wooA.owner_id !== match.user_a_id || wooB.owner_id !== match.user_b_id
+  ) {
+    await supabase
+      .from("matches")
+      .update({ status: "cancelled" })
+      .eq("id", matchId);
+
+    return {
+      data: null,
+      error: "One of the Woos is no longer available for trading",
+    };
+  }
+
   const isUserA = match.user_a_id === user.id;
 
   const { data: trade, error: tradeErr } = await supabase
@@ -436,6 +514,35 @@ export async function approveTrade(
   if (!match) return { success: false, error: "Match not found" };
   if (match.user_a_id !== user.id && match.user_b_id !== user.id) {
     return { success: false, error: "Not a participant" };
+  }
+
+  const { data: woos } = await supabase
+    .from("woos")
+    .select("id, status, owner_id")
+    .in("id", [trade.woo_a_id, trade.woo_b_id]);
+
+  const wooA = woos?.find((w) => w.id === trade.woo_a_id);
+  const wooB = woos?.find((w) => w.id === trade.woo_b_id);
+
+  if (
+    !wooA || !wooB ||
+    wooA.status !== "active" || wooB.status !== "active" ||
+    wooA.owner_id !== match.user_a_id || wooB.owner_id !== match.user_b_id
+  ) {
+    await supabase
+      .from("trades")
+      .update({ status: "cancelled" })
+      .eq("id", tradeId);
+
+    await supabase
+      .from("matches")
+      .update({ status: "cancelled" })
+      .eq("id", trade.match_id);
+
+    return {
+      success: false,
+      error: "One of the Woos is no longer available for trading",
+    };
   }
 
   const isUserA = match.user_a_id === user.id;
