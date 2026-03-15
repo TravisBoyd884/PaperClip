@@ -1,0 +1,75 @@
+{
+  "users": {
+    "alice": {
+      "items": [
+        {
+          "name": "Red Paperclip",
+          "description": "A shiny red paperclip. The start of something big.",
+          "condition": "good",
+          "category": "office",
+          "estimated_value": 0.01
+        },
+        {
+          "name": "Vintage Walkman",
+          "description": "A Sony Walkman from the late 80s. Still plays tapes perfectly.",
+          "condition": "fair",
+          "category": "electronics",
+          "estimated_value": 45.00
+        },
+        {
+          "name": "Marble Bookends",
+          "description": "A pair of polished white marble bookends with grey veining.",
+          "condition": "like_new",
+          "category": "furniture",
+          "estimated_value": 30.00
+        },
+        {
+          "name": "1952 Mickey Mantle Card",
+          "description": "A reproduction of the iconic 1952 Topps Mickey Mantle baseball card in a protective sleeve.",
+          "condition": "good",
+          "category": "collectible",
+          "estimated_value": 15.00
+        }
+      ]
+    },
+    "bob": {
+      "items": [
+        {
+          "name": "Wooden Pen",
+          "description": "A hand-carved wooden ballpoint pen made from reclaimed walnut.",
+          "condition": "like_new",
+          "category": "office",
+          "estimated_value": 5.00
+        },
+        {
+          "name": "Raspberry Pi 4",
+          "description": "A Raspberry Pi 4 Model B with 4GB RAM, no case or accessories.",
+          "condition": "good",
+          "category": "electronics",
+          "estimated_value": 35.00
+        },
+        {
+          "name": "Ceramic Desk Lamp",
+          "description": "A handmade ceramic desk lamp with a warm amber glaze. Works perfectly.",
+          "condition": "good",
+          "category": "furniture",
+          "estimated_value": 25.00
+        },
+        {
+          "name": "Signed Novel",
+          "description": "A first-edition signed copy of a popular mystery novel.",
+          "condition": "new",
+          "category": "other",
+          "estimated_value": 20.00
+        },
+        {
+          "name": "Brass Compass",
+          "description": "A vintage brass pocket compass with a hinged lid. Still points north.",
+          "condition": "fair",
+          "category": "collectible",
+          "estimated_value": 40.00
+        }
+      ]
+    }
+  }
+}
