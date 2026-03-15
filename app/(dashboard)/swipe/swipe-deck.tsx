@@ -264,11 +264,11 @@ export function SwipeDeck({ woos }: { woos: UserWoo[] }) {
     categoryFilter || conditionFilter || priceRange || nameSearch;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2 sm:space-y-4">
       {/* Woo selector with hex preview */}
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">
-          Trading with:
+      <div className="flex items-center gap-2 sm:gap-3">
+        <span className="text-xs sm:text-sm font-medium text-muted-foreground whitespace-nowrap">
+          Trading:
         </span>
         <div className="flex items-center gap-2">
           {selectedWoos.length > 0 && (
@@ -484,15 +484,15 @@ export function SwipeDeck({ woos }: { woos: UserWoo[] }) {
       )}
 
       {/* Card area */}
-      <div className="flex flex-col items-center gap-6">
+      <div className="flex flex-col items-center gap-3 sm:gap-6">
         {loading ? (
-          <div className="flex h-[460px] w-full max-w-sm items-center justify-center">
+          <div className="flex h-[260px] sm:h-[380px] md:h-[460px] w-full max-w-sm items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : !currentWoo ? (
-          <div className="flex h-[460px] w-full max-w-sm flex-col items-center justify-center rounded-2xl border border-dashed text-center px-6">
-            <p className="text-lg font-medium">No more Woos to swipe on</p>
-            <p className="text-sm text-muted-foreground mt-1 mb-4">
+          <div className="flex h-[260px] sm:h-[380px] md:h-[460px] w-full max-w-sm flex-col items-center justify-center rounded-2xl border border-dashed text-center px-4 sm:px-6">
+            <p className="text-base sm:text-lg font-medium">No more Woos to swipe on</p>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1 mb-3 sm:mb-4">
               {hasActiveFilters
                 ? "Try adjusting your filters or clearing them"
                 : "Check back later or try a different Woo"}
@@ -501,6 +501,7 @@ export function SwipeDeck({ woos }: { woos: UserWoo[] }) {
               {hasActiveFilters && (
                 <Button
                   variant="outline"
+                  size="sm"
                   onClick={() => {
                     clearFilters();
                     loadFeed(primaryWooId);
@@ -511,6 +512,7 @@ export function SwipeDeck({ woos }: { woos: UserWoo[] }) {
               )}
               <Button
                 variant="outline"
+                size="sm"
                 onClick={() => loadFeed(primaryWooId, buildFilters())}
               >
                 <RefreshCw className="mr-2 h-4 w-4" />
@@ -521,10 +523,10 @@ export function SwipeDeck({ woos }: { woos: UserWoo[] }) {
         ) : (
           <>
             {/* Card stack */}
-            <div className="relative h-[460px] w-full max-w-sm">
+            <div className="relative h-[260px] sm:h-[380px] md:h-[460px] w-full max-w-sm">
               {nextWoo && (
                 <div className="absolute inset-0 rounded-2xl overflow-hidden bg-card border shadow-sm scale-[0.96] opacity-60">
-                  <div className="relative h-[60%] w-full overflow-hidden bg-muted">
+                  <div className="relative h-[55%] sm:h-[60%] w-full overflow-hidden bg-muted">
                     {nextWoo.images?.[0] ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -549,29 +551,29 @@ export function SwipeDeck({ woos }: { woos: UserWoo[] }) {
             </div>
 
             {/* Swipe buttons */}
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-4 sm:gap-6">
               <Button
                 variant="outline"
                 size="icon"
-                className="h-14 w-14 rounded-full border-2 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                className="h-10 w-10 sm:h-14 sm:w-14 rounded-full border-2 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
                 onClick={() => handleSwipe("left")}
                 disabled={swiping}
               >
-                <X className="h-7 w-7" />
+                <X className="h-5 w-5 sm:h-7 sm:w-7" />
               </Button>
 
               {selectedWoos.length > 0 && (
-                <div className="text-center px-2">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                <div className="text-center px-1 sm:px-2">
+                  <p className="text-[9px] sm:text-[10px] text-muted-foreground uppercase tracking-wider">
                     Your Woo{selectedWoos.length > 1 ? "s" : ""}
                   </p>
-                  <p className="text-xs font-medium line-clamp-1 max-w-[100px]">
+                  <p className="text-[10px] sm:text-xs font-medium line-clamp-1 max-w-[80px] sm:max-w-[100px]">
                     {selectedWoos.length === 1
                       ? selectedWoos[0].title
                       : `${selectedWoos.length} Woos`}
                   </p>
                   {selectedWoos.length > 1 && (
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="text-[9px] sm:text-[10px] text-muted-foreground">
                       ${combinedValue.toFixed(2)}
                     </p>
                   )}
@@ -581,15 +583,15 @@ export function SwipeDeck({ woos }: { woos: UserWoo[] }) {
               <Button
                 variant="outline"
                 size="icon"
-                className="h-14 w-14 rounded-full border-2 border-pink-500 text-pink-500 hover:bg-pink-500 hover:text-white"
+                className="h-10 w-10 sm:h-14 sm:w-14 rounded-full border-2 border-pink-500 text-pink-500 hover:bg-pink-500 hover:text-white"
                 onClick={() => handleSwipe("right")}
                 disabled={swiping}
               >
-                <Heart className="h-7 w-7" />
+                <Heart className="h-5 w-5 sm:h-7 sm:w-7" />
               </Button>
             </div>
 
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[10px] sm:text-xs text-muted-foreground">
               Use ← → arrow keys or buttons to swipe
             </p>
           </>

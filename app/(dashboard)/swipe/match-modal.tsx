@@ -31,19 +31,19 @@ export function MatchModal({
 
   return (
     <Dialog open={!!data} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md text-center">
+      <DialogContent className="max-w-[90vw] sm:max-w-md text-center">
         <DialogTitle className="sr-only">It&apos;s a Match!</DialogTitle>
 
-        <div className="space-y-6 py-4">
-          <div className="space-y-2">
-            <Heart className="h-10 w-10 text-pink-500 mx-auto fill-pink-500 animate-pulse" />
-            <h2 className="text-2xl font-bold">It&apos;s a Match!</h2>
-            <p className="text-sm text-muted-foreground">
-              You both want to trade. Start chatting to seal the deal!
+        <div className="space-y-4 sm:space-y-6 py-2 sm:py-4">
+          <div className="space-y-1.5 sm:space-y-2">
+            <Heart className="h-7 w-7 sm:h-10 sm:w-10 text-pink-500 mx-auto fill-pink-500 animate-pulse" />
+            <h2 className="text-xl sm:text-2xl font-bold">It&apos;s a Match!</h2>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              You both want to trade. Start chatting!
             </p>
           </div>
 
-          <div className="flex items-center justify-center gap-6">
+          <div className="flex items-center justify-center gap-3 sm:gap-6">
             <WooHex
               title={data.your_woo.title}
               image={data.your_woo.images?.[0]}
@@ -87,8 +87,8 @@ function WooHex({
   label: string;
 }) {
   return (
-    <div className="flex flex-col items-center gap-2">
-      <div className="relative w-24 aspect-[1/1.15]">
+    <div className="flex flex-col items-center gap-1.5 sm:gap-2">
+      <div className="relative w-16 sm:w-24 aspect-[1/1.15]">
         <div
           className="absolute inset-0 woo-rainbow"
           style={{ clipPath: HEX_CLIP }}
@@ -112,8 +112,8 @@ function WooHex({
         </div>
       </div>
       <div className="text-center">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="text-sm font-medium line-clamp-1 max-w-[100px]">
+        <p className="text-[10px] sm:text-xs text-muted-foreground">{label}</p>
+        <p className="text-xs sm:text-sm font-medium line-clamp-1 max-w-[80px] sm:max-w-[100px]">
           {title}
         </p>
       </div>

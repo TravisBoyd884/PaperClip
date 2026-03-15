@@ -27,7 +27,7 @@ function timeAgo(dateStr: string): string {
 
 function MiniHex({ image, title }: { image?: string; title: string }) {
   return (
-    <div className="relative w-12 h-14 shrink-0">
+    <div className="relative w-8 h-[37px] sm:w-12 sm:h-14 shrink-0">
       <div
         className="absolute inset-0 bg-border"
         style={{ clipPath: HEX_CLIP }}
@@ -109,7 +109,7 @@ export function MatchList({
           return (
             <div
               key={match.id}
-              className="group flex items-center gap-4 rounded-lg border border-destructive/30 p-4 opacity-60"
+              className="group flex items-center gap-2 sm:gap-4 rounded-lg border border-destructive/30 p-2 sm:p-4 opacity-60"
             >
               <div className="flex items-center gap-2 grayscale">
                 <MiniHex
@@ -124,8 +124,8 @@ export function MatchList({
               </div>
 
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium truncate">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <span className="text-xs sm:text-sm font-medium truncate">
                     {match.counterparty.username ?? "Unknown"}
                   </span>
                   {match.counterparty.is_agent && (
@@ -133,17 +133,17 @@ export function MatchList({
                   )}
                   <Badge
                     variant="destructive"
-                    className="text-[10px] px-1.5 py-0 shrink-0"
+                    className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0 shrink-0"
                   >
                     Unavailable
                   </Badge>
                 </div>
-                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                <p className="text-[10px] sm:text-xs text-muted-foreground truncate mt-0.5">
                   {theirWoo?.title}
                   {" ⇄ "}
                   {myWoo?.title}
                 </p>
-                <p className="text-xs text-destructive/70 mt-0.5">
+                <p className="text-[10px] sm:text-xs text-destructive/70 mt-0.5 hidden sm:block">
                   This Woo has been traded
                 </p>
               </div>
@@ -157,7 +157,7 @@ export function MatchList({
           <Link
             key={match.id}
             href={`/matches/${match.id}`}
-            className="group flex items-center gap-4 rounded-lg border p-4 transition-colors hover:bg-accent/50"
+            className="group flex items-center gap-2 sm:gap-4 rounded-lg border p-2 sm:p-4 transition-colors hover:bg-accent/50"
           >
             <div className="flex items-center gap-2">
               <MiniHex
@@ -172,8 +172,8 @@ export function MatchList({
             </div>
 
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium truncate">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="text-xs sm:text-sm font-medium truncate">
                   {match.counterparty.username ?? "Unknown"}
                 </span>
                 {match.counterparty.is_agent && (
@@ -182,18 +182,18 @@ export function MatchList({
                 {match.status === "trade_proposed" && (
                   <Badge
                     variant="secondary"
-                    className="text-[10px] px-1.5 py-0 shrink-0"
+                    className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0 shrink-0"
                   >
-                    Trade Proposed
+                    Trade
                   </Badge>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground truncate mt-0.5">
+              <p className="text-[10px] sm:text-xs text-muted-foreground truncate mt-0.5">
                 {theirWoo?.title}
                 {" ⇄ "}
                 {myWoo?.title}
               </p>
-              <p className="text-xs text-muted-foreground truncate mt-0.5">
+              <p className="text-[10px] sm:text-xs text-muted-foreground truncate mt-0.5 hidden sm:block">
                 {match.last_message
                   ? match.last_message.content.length > 60
                     ? match.last_message.content.slice(0, 60) + "..."
@@ -202,7 +202,7 @@ export function MatchList({
               </p>
             </div>
 
-            <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
+            <span className="text-[9px] sm:text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
               {timeAgo(lastActivity)}
             </span>
 

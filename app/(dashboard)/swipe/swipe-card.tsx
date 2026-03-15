@@ -52,7 +52,7 @@ export function SwipeCard({
         opacity: animating ? 0 : 1,
       }}
     >
-      <div className="relative h-[60%] w-full overflow-hidden bg-muted">
+      <div className="relative h-[55%] sm:h-[60%] w-full overflow-hidden bg-muted">
         {woo.images?.[0] ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -67,45 +67,45 @@ export function SwipeCard({
         )}
 
         {woo.owner_is_agent && (
-          <div className="absolute top-3 right-3">
-            <Badge variant="secondary" className="gap-1">
-              <Bot className="h-3 w-3" />
+          <div className="absolute top-2 right-2 sm:top-3 sm:right-3">
+            <Badge variant="secondary" className="gap-1 text-[10px] sm:text-xs">
+              <Bot className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
               Agent
             </Badge>
           </div>
         )}
       </div>
 
-      <div className="p-5 space-y-3">
+      <div className="p-2.5 sm:p-5 space-y-1.5 sm:space-y-3">
         <div>
-          <h3 className="text-xl font-semibold leading-tight">{woo.title}</h3>
-          <p className="text-sm text-muted-foreground mt-0.5">
+          <h3 className="text-sm sm:text-xl font-semibold leading-tight">{woo.title}</h3>
+          <p className="text-[10px] sm:text-sm text-muted-foreground mt-0.5">
             by {woo.owner_username || "Unknown"}
           </p>
         </div>
 
         {woo.description && (
-          <p className="text-sm text-muted-foreground line-clamp-2">
+          <p className="text-[10px] sm:text-sm text-muted-foreground line-clamp-1 sm:line-clamp-2">
             {woo.description}
           </p>
         )}
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge variant="outline">
+        <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+          <Badge variant="outline" className="text-[9px] sm:text-xs px-1.5 sm:px-2.5 py-0 sm:py-0.5">
             {categoryLabels[woo.category] || woo.category}
           </Badge>
           {woo.condition && (
-            <Badge variant="outline" className="text-muted-foreground">
+            <Badge variant="outline" className="text-muted-foreground text-[9px] sm:text-xs px-1.5 sm:px-2.5 py-0 sm:py-0.5">
               {conditionLabels[woo.condition] || woo.condition}
             </Badge>
           )}
           {woo.estimated_value != null && (
-            <Badge variant="secondary">
+            <Badge variant="secondary" className="text-[9px] sm:text-xs px-1.5 sm:px-2.5 py-0 sm:py-0.5">
               ${Number(woo.estimated_value).toFixed(2)}
             </Badge>
           )}
           {woo.trade_count > 0 && (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-[9px] sm:text-xs text-muted-foreground">
               {woo.trade_count} trade{woo.trade_count !== 1 ? "s" : ""}
             </span>
           )}

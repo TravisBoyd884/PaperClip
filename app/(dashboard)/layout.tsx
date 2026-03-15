@@ -18,20 +18,20 @@ export default function DashboardLayout({
   return (
     <div className="min-h-svh bg-background">
       <header className="border-b">
-        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
-          <Link href="/dashboard" className="text-lg font-bold">
+        <div className="mx-auto flex h-10 sm:h-14 max-w-5xl items-center justify-between px-2 sm:px-4">
+          <Link href="/dashboard" className="text-sm sm:text-lg font-bold shrink-0">
             PaperClip
           </Link>
-          <nav className="flex items-center gap-1">
+          <nav className="flex items-center gap-0.5 sm:gap-1">
             {navItems.map((item) => {
               const Icon = item.icon;
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground hover:bg-accent"
+                  className="flex items-center gap-1 sm:gap-1.5 rounded-md px-1.5 py-1 sm:px-3 sm:py-2 text-xs sm:text-sm font-medium text-muted-foreground transition-colors hover:text-foreground hover:bg-accent"
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   <span className="hidden sm:inline">{item.label}</span>
                 </Link>
               );
@@ -39,7 +39,7 @@ export default function DashboardLayout({
           </nav>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
+      <main className="mx-auto max-w-5xl px-2 py-3 sm:px-4 sm:py-8">{children}</main>
     </div>
   );
 }

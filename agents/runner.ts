@@ -7,16 +7,15 @@ import * as browser from "./browser-agent.js";
 function getScreenSize(): { width: number; height: number } {
   try {
     if (process.platform === "win32") {
+      // Use WorkingArea which returns logical pixels (DPI-aware) and excludes the taskbar
       const out = execSync(
-        "wmic path Win32_VideoController get CurrentHorizontalResolution,CurrentVerticalResolution /format:csv",
+        'powershell -c "Add-Type -AssemblyName System.Windows.Forms; $s = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea; \\"$($s.Width),$($s.Height)\\""',
         { encoding: "utf-8" }
       );
-      for (const line of out.trim().split("\n")) {
-        const parts = line.trim().split(",");
-        const w = parseInt(parts[1], 10);
-        const h = parseInt(parts[2], 10);
-        if (w > 0 && h > 0) return { width: w, height: h };
-      }
+      const parts = out.trim().split(",");
+      const w = parseInt(parts[0], 10);
+      const h = parseInt(parts[1], 10);
+      if (w > 0 && h > 0) return { width: w, height: h };
     } else if (process.platform === "darwin") {
       const out = execSync(
         "system_profiler SPDisplaysDataType | grep Resolution",

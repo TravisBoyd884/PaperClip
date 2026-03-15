@@ -393,41 +393,41 @@ export function ChatView({
   }
 
   return (
-    <div className="flex flex-col h-[calc(100svh-8rem)]">
+    <div className="flex flex-col h-[calc(100svh-5rem)] sm:h-[calc(100svh-8rem)]">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b pb-4 mb-4">
-        <Button variant="ghost" size="icon" asChild className="shrink-0">
+      <div className="flex items-center gap-2 sm:gap-3 border-b pb-2 sm:pb-4 mb-2 sm:mb-4">
+        <Button variant="ghost" size="icon" asChild className="shrink-0 h-7 w-7 sm:h-9 sm:w-9">
           <Link href="/matches">
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           </Link>
         </Button>
 
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-0">
           <MiniHex
             image={theirWoo?.images?.[0]}
             title={theirWoo?.title ?? ""}
           />
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm font-medium truncate">
+            <div className="flex items-center gap-1 sm:gap-1.5">
+              <span className="text-xs sm:text-sm font-medium truncate">
                 {theirProfile.username ?? "Unknown"}
               </span>
               {theirProfile.is_agent && (
                 <Bot className="h-3 w-3 text-muted-foreground shrink-0" />
               )}
             </div>
-            <p className="text-xs text-muted-foreground truncate">
+            <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
               {theirWoo?.title} ⇄ {myWoo?.title}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {isUnavailable && (
-            <Badge variant="destructive">Woo Unavailable</Badge>
+            <Badge variant="destructive" className="text-[10px] sm:text-xs">Unavailable</Badge>
           )}
           {match.status === "trade_completed" && (
-            <Badge variant="secondary">Traded</Badge>
+            <Badge variant="secondary" className="text-[10px] sm:text-xs">Traded</Badge>
           )}
           {!isInactive && !hasPendingTrade && (
             <Button
@@ -435,20 +435,22 @@ export function ChatView({
               variant="outline"
               onClick={() => setShowProposalDialog(true)}
               disabled={proposing}
+              className="text-[10px] sm:text-xs h-7 sm:h-8 px-2 sm:px-3"
             >
               {proposing ? (
                 <Loader2 className="mr-1 h-3 w-3 animate-spin" />
               ) : (
                 <ArrowLeftRight className="mr-1 h-3 w-3" />
               )}
-              Propose Trade
+              <span className="hidden sm:inline">Propose Trade</span>
+              <span className="sm:hidden">Trade</span>
             </Button>
           )}
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto space-y-3 pb-4">
+      <div className="flex-1 overflow-y-auto space-y-2 sm:space-y-3 pb-2 sm:pb-4">
         {messages.length === 0 && (
           <div className="flex items-center justify-center h-full">
             <p className="text-sm text-muted-foreground">
@@ -515,7 +517,7 @@ export function ChatView({
               className={`flex ${isMine ? "justify-end" : "justify-start"}`}
             >
               <div
-                className={`max-w-[75%] rounded-2xl px-4 py-2 ${
+                className={`max-w-[80%] sm:max-w-[75%] rounded-2xl px-2.5 py-1.5 sm:px-4 sm:py-2 ${
                   isMine
                     ? "bg-primary text-primary-foreground rounded-br-md"
                     : "bg-muted rounded-bl-md"
@@ -523,7 +525,7 @@ export function ChatView({
               >
                 {!isMine && msg.sender && (
                   <div className="flex items-center gap-1 mb-0.5">
-                    <span className="text-[10px] font-medium opacity-70">
+                    <span className="text-[9px] sm:text-[10px] font-medium opacity-70">
                       {msg.sender.username ?? "Unknown"}
                     </span>
                     {msg.sender.is_agent && (
@@ -531,9 +533,9 @@ export function ChatView({
                     )}
                   </div>
                 )}
-                <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                <p className="text-xs sm:text-sm whitespace-pre-wrap break-words">{msg.content}</p>
                 <p
-                  className={`text-[10px] mt-1 ${
+                  className={`text-[9px] sm:text-[10px] mt-0.5 sm:mt-1 ${
                     isMine ? "text-primary-foreground/60" : "text-muted-foreground"
                   }`}
                 >
@@ -549,36 +551,37 @@ export function ChatView({
 
       {/* Input */}
       {!isInactive && (
-        <form onSubmit={handleSend} className="flex gap-2 pt-2 border-t">
+        <form onSubmit={handleSend} className="flex gap-1.5 sm:gap-2 pt-1.5 sm:pt-2 border-t">
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type a message..."
             disabled={sending}
             autoFocus
+            className="h-8 sm:h-9 text-xs sm:text-sm"
           />
-          <Button type="submit" size="icon" disabled={sending || !input.trim()}>
+          <Button type="submit" size="icon" disabled={sending || !input.trim()} className="h-8 w-8 sm:h-9 sm:w-9 shrink-0">
             {sending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
             ) : (
-              <Send className="h-4 w-4" />
+              <Send className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             )}
           </Button>
         </form>
       )}
 
       {isTradeCompleted && (
-        <div className="text-center py-3 border-t">
-          <p className="text-sm text-muted-foreground">
-            This trade has been completed. Woos have been swapped!
+        <div className="text-center py-2 sm:py-3 border-t">
+          <p className="text-xs sm:text-sm text-muted-foreground">
+            Trade completed. Woos have been swapped!
           </p>
         </div>
       )}
 
       {isUnavailable && (
-        <div className="text-center py-3 border-t">
-          <p className="text-sm text-destructive/70">
-            This Woo has been traded. This match is no longer available.
+        <div className="text-center py-2 sm:py-3 border-t">
+          <p className="text-xs sm:text-sm text-destructive/70">
+            This Woo has been traded. Match no longer available.
           </p>
         </div>
       )}

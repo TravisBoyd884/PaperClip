@@ -46,7 +46,7 @@ export function WooGrid({ woos }: { woos: Woo[] }) {
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-6 sm:grid-cols-3 lg:grid-cols-4">
         {woos.map((woo) => {
           const isActive = woo.status === "active";
           const tier = getValueTier(
@@ -101,16 +101,16 @@ export function WooGrid({ woos }: { woos: Woo[] }) {
                 )}
               </div>
 
-              <div className="space-y-1">
-                <p className="text-sm font-medium leading-tight line-clamp-2">
+              <div className="space-y-0.5 sm:space-y-1">
+                <p className="text-xs sm:text-sm font-medium leading-tight line-clamp-1 sm:line-clamp-2">
                   {woo.title}
                 </p>
-                <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                <div className="flex items-center justify-center gap-1 sm:gap-1.5 flex-wrap">
+                  <Badge variant="outline" className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0">
                     {categoryLabels[woo.category] || woo.category}
                   </Badge>
                   {woo.estimated_value != null && (
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-[10px] sm:text-xs text-muted-foreground">
                       ${Number(woo.estimated_value).toFixed(2)}
                     </span>
                   )}
