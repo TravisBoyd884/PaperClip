@@ -118,7 +118,7 @@ async function invalidateUnavailableMatches(
 
   await supabase
     .from("matches")
-    .update({ status: "cancelled" })
+    .update({ status: "trade_unavailable" })
     .in("id", staleMatchIds);
 }
 
@@ -145,7 +145,7 @@ export async function getMyMatches(): Promise<{
       woo_b:woos!matches_woo_b_id_fkey(id, title, images, estimated_value, category, trade_count, description)
     `
     )
-    .in("status", ["active", "trade_proposed", "cancelled"])
+    .in("status", ["active", "trade_proposed", "trade_unavailable"])
     .or(`user_a_id.eq.${user.id},user_b_id.eq.${user.id}`)
     .order("created_at", { ascending: false });
 
@@ -209,7 +209,7 @@ export async function getMyMatches(): Promise<{
         is_agent: profile?.is_agent ?? false,
       },
       last_message: lastMessageMap.get(m.id) ?? null,
-      woo_unavailable: m.status === "cancelled",
+      woo_unavailable: m.status === "trade_unavailable",
     };
   });
 
@@ -441,7 +441,7 @@ export async function proposeTrade(
   ) {
     await supabase
       .from("matches")
-      .update({ status: "cancelled" })
+      .update({ status: "trade_unavailable" })
       .eq("id", matchId);
 
     return {
@@ -538,7 +538,7 @@ export async function approveTrade(
 
     await supabase
       .from("matches")
-      .update({ status: "cancelled" })
+      .update({ status: "trade_unavailable" })
       .eq("id", trade.match_id);
 
     return {
@@ -653,6 +653,47 @@ export async function cancelTrade(
   });
 
   revalidatePath(`/matches/${trade.match_id}`);
+  revalidatePath("/matches");
+  return { success: true };
+}
+
+export async function dismissMatch(
+  matchId: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { success: false, error: "Not authenticated" };
+
+  const { data: match } = await supabase
+    .from("matches")
+    .select("id, user_a_id, user_b_id, status")
+    .eq("id", matchId)
+    .single();
+
+  if (!match) return { success: false, error: "Match not found" };
+  if (match.user_a_id !== user.id && match.user_b_id !== user.id) {
+    return { success: false, error: "Not a participant" };
+  }
+  if (match.status === "trade_completed") {
+    return { success: false, error: "Cannot dismiss a completed trade" };
+  }
+
+  await supabase
+    .from("trades")
+    .update({ status: "cancelled" })
+    .eq("match_id", matchId)
+    .eq("status", "pending");
+
+  const { error: updateErr } = await supabase
+    .from("matches")
+    .update({ status: "dismissed" })
+    .eq("id", matchId);
+
+  if (updateErr) return { success: false, error: updateErr.message };
+
   revalidatePath("/matches");
   return { success: true };
 }

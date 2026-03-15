@@ -64,15 +64,17 @@ User browses the swipe feed (Woos from other users)
   -> Both users return to swiping with their new Woos
 ```
 
-**Match states**: `active` -> `trade_proposed` -> `trade_completed` | `expired` | `cancelled`
+**Match states**: `active` -> `trade_proposed` -> `trade_completed` | `expired` | `cancelled` | `trade_unavailable` | `dismissed`
 
 **Trade states**: `pending` -> `approved_by_a` | `approved_by_b` -> `completed` | `cancelled`
 
 **Trade availability validation** (defense-in-depth):
-- **Database layer** (`execute_trade()`): Before swapping ownership, locks both Woos and verifies they are still `active` and owned by the expected match participants. Auto-cancels the trade and match if validation fails.
-- **Server action layer** (`proposeTrade()`, `approveTrade()`): Checks Woo status and ownership before creating or approving a trade. Auto-cancels the match (and trade, if applicable) and returns a user-facing error if a Woo is unavailable.
-- **Match list cleanup** (`invalidateUnavailableMatches()`): Called when loading matches; cancels any active/proposed match where either Woo is no longer `active` or has changed owners, along with any pending trades on those matches.
+- **Database layer** (`execute_trade()`): Before swapping ownership, locks both Woos and verifies they are still `active` and owned by the expected match participants. Sets the match to `trade_unavailable` if validation fails. After a successful swap, proactively sets all other open matches referencing either traded Woo to `trade_unavailable` and cancels their pending trades.
+- **Server action layer** (`proposeTrade()`, `approveTrade()`): Checks Woo status and ownership before creating or approving a trade. Sets the match to `trade_unavailable` (and cancels the trade, if applicable) and returns a user-facing error if a Woo is unavailable.
+- **Match list cleanup** (`invalidateUnavailableMatches()`): Called when loading matches; sets any active/proposed match to `trade_unavailable` where either Woo is no longer `active` or has changed owners, along with cancelling any pending trades on those matches.
 - **Match creation** (`check_match()`): Verifies both Woos are `active` before creating a match from a reciprocal swipe.
+
+**Match dismissal**: Users can dismiss any match (except completed trades) via the X button in the match list. This sets the match status to `dismissed`, which hides it from the user's match list. Any pending trade on the match is also cancelled.
 
 ### 3.3 Cash Out Flow
 
@@ -288,7 +290,7 @@ Links user profiles to warehouses they manage. Used for admin panel authorizatio
 
 ### 5.12 Key Database Functions
 
-- **`execute_trade(trade_id)`**: Atomically swaps Woo ownership when both parties approve. Locks both Woos with `FOR UPDATE`, verifies both are `active` and still owned by the match participants, then swaps. Auto-cancels trade and match if validation fails. Runs as `SECURITY DEFINER`.
+- **`execute_trade(trade_id)`**: Atomically swaps Woo ownership when both parties approve. Locks both Woos with `FOR UPDATE`, verifies both are `active` and still owned by the match participants, then swaps. Sets match to `trade_unavailable` if validation fails. After a successful swap, proactively marks all other open matches referencing either traded Woo as `trade_unavailable` and cancels their pending trades. Runs as `SECURITY DEFINER`.
 - **`check_match(swiper_woo_id, target_woo_id)`**: Called after every right-swipe to check if a reciprocal swipe exists. Verifies both Woos are `active` before creating a match; returns null if either Woo is unavailable.
 - **`burn_woo(woo_id)`**: Sets a Woo's status to `burned` during cash out. Validates the Woo is not in an active trade.
 - **`mint_woo(item_id)`**: Atomically creates a Woo from a verified item. Validates the item is in `verified` status, creates the Woo with data inherited from the item (name, description, photos, category, estimated_value), sets item status to `stored`, and increments `warehouses.current_count`. Runs as `SECURITY DEFINER`.
@@ -855,6 +857,8 @@ paperclip/
 - Trade proposal, approval, and execution via `execute_trade()` DB function
 - `get_swipe_feed()` DB function for efficient feed queries
 - Trade availability validation: defense-in-depth checks across DB functions, server actions, and match list to prevent trades on Woos that have been traded away or cashed out
+- Proactive match cleanup: `execute_trade()` atomically marks sibling matches as `trade_unavailable` after a successful swap
+- Match dismissal: users can dismiss any non-completed match via X button, setting status to `dismissed`
 
 ### Phase 3: Agent Integration
 - Agent key management (create, revoke, list)

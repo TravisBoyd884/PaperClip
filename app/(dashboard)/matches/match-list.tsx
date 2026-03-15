@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { Bot } from "lucide-react";
-import type { MatchSummary } from "./actions";
+import { Button } from "@/components/ui/button";
+import { Bot, X } from "lucide-react";
+import { toast } from "sonner";
+import { dismissMatch, type MatchSummary } from "./actions";
 
 const HEX_CLIP =
   "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)";
@@ -49,13 +52,49 @@ function MiniHex({ image, title }: { image?: string; title: string }) {
   );
 }
 
+function DismissButton({ matchId, onDismissed }: { matchId: string; onDismissed: (id: string) => void }) {
+  const [dismissing, setDismissing] = useState(false);
+
+  async function handleDismiss(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (dismissing) return;
+    setDismissing(true);
+    onDismissed(matchId);
+
+    const result = await dismissMatch(matchId);
+    if (result.error) {
+      toast.error(result.error);
+    }
+    setDismissing(false);
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+      onClick={handleDismiss}
+      disabled={dismissing}
+    >
+      <X className="h-3.5 w-3.5" />
+    </Button>
+  );
+}
+
 export function MatchList({
-  matches,
+  matches: initialMatches,
   currentUserId,
 }: {
   matches: MatchSummary[];
   currentUserId: string;
 }) {
+  const [matches, setMatches] = useState(initialMatches);
+
+  function handleDismissed(matchId: string) {
+    setMatches((prev) => prev.filter((m) => m.id !== matchId));
+  }
+
   return (
     <div className="space-y-3">
       {matches.map((match) => {
@@ -69,7 +108,7 @@ export function MatchList({
           return (
             <div
               key={match.id}
-              className="flex items-center gap-4 rounded-lg border p-4 opacity-50 pointer-events-none"
+              className="group flex items-center gap-4 rounded-lg border border-destructive/30 p-4 opacity-60"
             >
               <div className="flex items-center gap-2 grayscale">
                 <MiniHex
@@ -91,6 +130,12 @@ export function MatchList({
                   {match.counterparty.is_agent && (
                     <Bot className="h-3 w-3 text-muted-foreground shrink-0" />
                   )}
+                  <Badge
+                    variant="destructive"
+                    className="text-[10px] px-1.5 py-0 shrink-0"
+                  >
+                    Unavailable
+                  </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground truncate mt-0.5">
                   {theirWoo?.title}
@@ -101,6 +146,8 @@ export function MatchList({
                   This Woo has been traded
                 </p>
               </div>
+
+              <DismissButton matchId={match.id} onDismissed={handleDismissed} />
             </div>
           );
         }
@@ -109,7 +156,7 @@ export function MatchList({
           <Link
             key={match.id}
             href={`/matches/${match.id}`}
-            className="flex items-center gap-4 rounded-lg border p-4 transition-colors hover:bg-accent/50"
+            className="group flex items-center gap-4 rounded-lg border p-4 transition-colors hover:bg-accent/50"
           >
             <div className="flex items-center gap-2">
               <MiniHex
@@ -157,6 +204,8 @@ export function MatchList({
             <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
               {timeAgo(lastActivity)}
             </span>
+
+            <DismissButton matchId={match.id} onDismissed={handleDismissed} />
           </Link>
         );
       })}

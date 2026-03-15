@@ -83,8 +83,8 @@ export function ChatView({
   const theirWoo = isUserA ? match.woo_b : match.woo_a;
   const theirProfile = isUserA ? match.user_b : match.user_a;
   const isTradeCompleted = match.status === "trade_completed";
-  const isCancelled = match.status === "cancelled";
-  const isInactive = isTradeCompleted || isCancelled;
+  const isUnavailable = match.status === "cancelled" || match.status === "trade_unavailable";
+  const isInactive = isTradeCompleted || isUnavailable;
   const hasPendingTrade = match.active_trade?.status === "pending";
 
   const scrollToBottom = useCallback(() => {
@@ -233,7 +233,7 @@ export function ChatView({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {isCancelled && (
+          {isUnavailable && (
             <Badge variant="destructive">Woo Unavailable</Badge>
           )}
           {match.status === "trade_completed" && (
@@ -387,7 +387,7 @@ export function ChatView({
         </div>
       )}
 
-      {isCancelled && (
+      {isUnavailable && (
         <div className="text-center py-3 border-t">
           <p className="text-sm text-destructive/70">
             This Woo has been traded. This match is no longer available.
