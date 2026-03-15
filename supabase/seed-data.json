@@ -1,6 +1,7 @@
 {
-  "users": {
-    "alice": {
+  "item_groups": [
+    {
+      "label": "User 1",
       "items": [
         {
           "name": "Red Paperclip",
@@ -32,7 +33,8 @@
         }
       ]
     },
-    "bob": {
+    {
+      "label": "User 2",
       "items": [
         {
           "name": "Wooden Pen",
@@ -71,5 +73,5 @@
         }
       ]
     }
-  }
+  ]
 }

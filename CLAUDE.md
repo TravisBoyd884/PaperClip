@@ -310,7 +310,7 @@ Links user profiles to warehouses they manage. Used for admin panel authorizatio
 - **`execute_trade(trade_id)`**: Atomically swaps Woo ownership when both parties approve. Reads all Woos from `trade_woos` join table (supports N:M multi-Woo trades), locks each with `FOR UPDATE`, verifies all are `active` and owned by the expected party, then transfers side-a Woos to user B and side-b Woos to user A. Sets match to `trade_unavailable` if validation fails. After a successful swap, proactively marks all other open matches referencing any traded Woo as `trade_unavailable` and cancels their pending trades. Runs as `SECURITY DEFINER`.
 - **`check_match(swiper_woo_id, target_woo_id)`**: Called after every right-swipe to check if a reciprocal swipe exists. Verifies both Woos are `active` before creating a match; returns null if either Woo is unavailable.
 - **`burn_woo(woo_id)`**: Sets a Woo's status to `burned` during cash out. Validates the Woo is not in an active trade.
-- **`mint_woo(item_id)`**: Atomically creates a Woo from a verified item. Validates the item is in `verified` status, creates the Woo with data inherited from the item (name, description, photos, category, estimated_value), sets item status to `stored`, and increments `warehouses.current_count`. Runs as `SECURITY DEFINER`.
+- **`mint_woo(item_id)`**: Atomically creates a Woo from a verified item. Validates the item is in `verified` status, creates the Woo with data inherited from the item (name, description, photos, category, condition, estimated_value), sets item status to `stored`, and increments `warehouses.current_count`. Runs as `SECURITY DEFINER`.
 - **`get_swipe_feed(user_id, swiper_woo_id, limit, category, condition, min_value, max_value, name_search, swiper_value)`**: Returns swipeable Woos for the given user and swiper Woo. Filters to `active` Woos not owned by the user, excludes already-swiped targets, and applies optional filters (category, condition, price range, name search). Orders by closest estimated value to `swiper_value` (combined value of user's selected Woos) with random tiebreaker. Joins owner profile data (username, avatar, is_agent). Runs as `SECURITY DEFINER`.
 
 ### 5.13 Row-Level Security (RLS) Policies
@@ -853,11 +853,12 @@ paperclip/
 │   │   ├── 20250314000005_trade_availability_checks.sql # Defense-in-depth trade validation
 │   │   ├── 20250314000006_match_cleanup.sql       # trade_unavailable/dismissed statuses, sibling match cleanup
 │   │   ├── 20250314000007_swipe_filters.sql       # Add condition to woos, swipe feed filters + value-based ordering
-│   │   └── 20250314000008_multi_woo_trades.sql    # trade_woos join table for N:M trades
+│   │   ├── 20250314000008_multi_woo_trades.sql    # trade_woos join table for N:M trades
+│   │   └── 20250314000009_drop_old_swipe_feed.sql # Drop old 3-param get_swipe_feed overload
 │   ├── seed-data.json              # Configurable seed items for test users (read by scripts/seed.ts)
 │   └── seed.sql                    # Seed data (warehouses)
 ├── scripts/
-│   └── seed.ts                    # Re-runnable seed script: creates test users, items, and Woos
+│   └── seed.ts                    # Re-runnable seed script: discovers profiles, seeds items and Woos
 ├── middleware.ts                   # Auth middleware (protects /dashboard, /admin, etc.)
 ├── CLAUDE.md                       # This file
 ├── package.json
@@ -870,7 +871,7 @@ paperclip/
 
 ## 14. Seed Data
 
-The project includes a re-runnable seed system for local development. It populates the database with two test users and their fully minted Woos, providing a clean starting point for testing the swipe/match/trade flow.
+The project includes a re-runnable seed system that populates the remote database with fully minted Woos for existing users, providing a clean starting point for testing and demoing the swipe/match/trade flow.
 
 ### 14.1 Running the Seed
 
@@ -878,30 +879,29 @@ The project includes a re-runnable seed system for local development. It populat
 pnpm seed
 ```
 
-Requires a running local Supabase instance (`supabase start`). The script targets `http://127.0.0.1:54321` by default. Override with `SEED_SUPABASE_URL` and `SEED_SUPABASE_SERVICE_ROLE_KEY` env vars if needed.
+The script reads `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from the `.env` file (via `dotenv`) and connects to the remote Supabase database.
 
-The script is **re-runnable**: it deletes all previously seeded data (including any swipes, matches, and trades created during testing) before reinserting, so `supabase db reset` is not required between runs. Edit `supabase/seed-data.json` and re-run `pnpm seed` at any time.
+The script is **re-runnable**: it deletes all previously seeded data (including any swipes, matches, and trades created during testing) before reinserting. Edit `supabase/seed-data.json` and re-run `pnpm seed` at any time to reset to a clean state.
 
-### 14.2 Test Users
+### 14.2 How It Works
 
-| User | Email | Password | UUID |
-|---|---|---|---|
-| alice | `alice@test.com` | `password123` | `aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa` |
-| bob | `bob@test.com` | `password123` | `bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb` |
+1. The script auto-discovers all profiles in the `profiles` table, ordered by `created_at`.
+2. It matches each profile to an item group from `supabase/seed-data.json` in order (first profile gets the first group, second gets the second, etc.).
+3. It deletes any previously seeded items, woos, swipes, matches, messages, and trades for those users.
+4. It inserts items (status `stored`, `verified: true`) and woos (status `active`) with deterministic UUIDs derived from each user's real UUID.
 
 ### 14.3 Seed Data Configuration
 
-Item definitions live in `supabase/seed-data.json`. Each user has an array of items with `name`, `description`, `condition`, `category`, and `estimated_value`. The seed script creates corresponding `items` (status `stored`, verified) and `woos` (status `active`) using deterministic UUIDs derived from the user key and item index.
+Item definitions live in `supabase/seed-data.json` as an `item_groups` array. Each group has a `label` (for console output) and an `items` array. Each item has `name`, `description`, `condition`, `category`, and `estimated_value`.
 
-To add or change seed items, edit `seed-data.json` and run `pnpm seed` again.
+To add or change seed items, edit `seed-data.json` and run `pnpm seed` again. To add items for a third user, add another group to the array and ensure a third profile exists in the database.
 
 ### 14.4 What Gets Seeded
 
-- Two auth users with auto-created profiles
 - Items assigned to PaperClip West warehouse (status `stored`, `verified: true`)
 - Active Woos mirroring each item's fields
 - Placeholder images via `placehold.co`
-- **No** swipes, matches, messages, or trades
+- **No** swipes, matches, messages, or trades (these are cleaned up on each run)
 
 ---
 
@@ -924,6 +924,9 @@ To add or change seed items, edit `seed-data.json` and run `pnpm seed` again.
 - Trade availability validation: defense-in-depth checks across DB functions, server actions, and match list to prevent trades on Woos that have been traded away or cashed out
 - Proactive match cleanup: `execute_trade()` atomically marks sibling matches as `trade_unavailable` after a successful swap
 - Match dismissal: users can dismiss any non-completed match via X button, setting status to `dismissed`
+- Swipe feed filters: category, condition, price range, name search, and value-based ordering
+- `condition` column on woos (copied from item at mint)
+- Multi-Woo trades: `trade_woos` join table for N:M trades, updated `execute_trade()` and chat/trade UI
 
 ### Phase 3: Agent Integration
 - Agent key management (create, revoke, list)
@@ -942,10 +945,11 @@ To add or change seed items, edit `seed-data.json` and run `pnpm seed` again.
 - Mock shipping label API at `/api/shipping-label`
 
 ### Phase 5: Seed Data -- COMPLETE
-- Re-runnable TypeScript seed script (`scripts/seed.ts`) with deterministic UUIDs
-- JSON-configurable item definitions (`supabase/seed-data.json`)
-- Two test users (alice, bob) with 3-5 minted Woos each
-- `pnpm seed` script for quick re-seeding without `supabase db reset`
+- Re-runnable TypeScript seed script (`scripts/seed.ts`) targeting remote Supabase via `.env`
+- Auto-discovers existing profiles and seeds items/Woos for each
+- JSON-configurable item definitions (`supabase/seed-data.json`) with positional item groups
+- Deterministic UUIDs derived from real user UUIDs for clean delete-then-reinsert
+- `pnpm seed` script for quick re-seeding (cleans up swipes, matches, trades between runs)
 
 ### Phase 6: Polish
 - Landing page (basic version exists)
