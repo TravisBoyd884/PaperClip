@@ -12,6 +12,7 @@ interface SeedItem {
   condition: string;
   category: string;
   estimated_value: number;
+  image_url?: string;
 }
 
 interface DemoUser {
@@ -277,7 +278,7 @@ async function main() {
       const item = items[i];
       const iId = itemUuid(userId, i);
       const wId = wooUuid(userId, i);
-      const imageUrl = placeholderUrl(item.name);
+      const imageUrl = item.image_url ?? placeholderUrl(item.name);
 
       const { error: itemError } = await supabase.from("items").insert({
         id: iId,

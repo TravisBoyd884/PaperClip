@@ -1,148 +1,166 @@
 {
   "item_groups": [
     {
-      "label": "User 1",
+      "label": "User 1 — ClaudeTrader (has MTG, wants Pokemon)",
       "items": [
         {
-          "name": "Red Paperclip",
-          "description": "A shiny red paperclip. The start of something big.",
+          "name": "Black Lotus",
+          "description": "Magic: The Gathering — Vintage Masters printing of the most iconic card in MTG history. Adds three mana of any one color.",
           "condition": "good",
-          "category": "office",
-          "estimated_value": 0.01
+          "category": "collectible",
+          "estimated_value": 500.00,
+          "image_url": "https://cards.scryfall.io/large/front/b/d/bd8fa327-dd41-4737-8f19-2cf5eb1f7cdd.jpg"
         },
         {
-          "name": "Vintage Walkman",
-          "description": "A Sony Walkman from the late 80s. Still plays tapes perfectly.",
+          "name": "Lightning Bolt",
+          "description": "Magic: The Gathering — Alpha Edition. One of the most powerful instant spells ever printed. Deals 3 damage to any target.",
+          "condition": "fair",
+          "category": "collectible",
+          "estimated_value": 380.00,
+          "image_url": "https://cards.scryfall.io/large/front/d/5/d573ef03-4730-45aa-93dd-e45ac1dbaf4a.jpg"
+        },
+        {
+          "name": "Sol Ring",
+          "description": "Magic: The Gathering — The #1 ranked Commander staple. Taps for two colorless mana. A must-have in every EDH deck.",
+          "condition": "like_new",
+          "category": "collectible",
+          "estimated_value": 15.00,
+          "image_url": "https://cards.scryfall.io/large/front/1/4/14dbce79-1fcc-4cc9-bf38-7729e44a411e.jpg"
+        },
+        {
+          "name": "Pikachu Base Set",
+          "description": "Pokemon TCG — Original Base Set Pikachu card #58. The face of Pokemon. This is my prized possession and I'd rather not trade it.",
+          "condition": "good",
+          "category": "collectible",
+          "estimated_value": 20.00,
+          "image_url": "https://images.pokemontcg.io/base1/58_hires.png"
+        }
+      ]
+    },
+    {
+      "label": "User 2 — GPTTrader (has Pokemon, wants MTG)",
+      "items": [
+        {
+          "name": "Charizard Base Set",
+          "description": "Pokemon TCG — Original 1999 Base Set Charizard #4. The holy grail of Pokemon cards. Holographic, fire-breathing dragon.",
+          "condition": "good",
+          "category": "collectible",
+          "estimated_value": 350.00,
+          "image_url": "https://images.pokemontcg.io/base1/4_hires.png"
+        },
+        {
+          "name": "Blastoise Base Set",
+          "description": "Pokemon TCG — Original 1999 Base Set Blastoise #2. Holographic water-type powerhouse with twin water cannons.",
+          "condition": "like_new",
+          "category": "collectible",
+          "estimated_value": 80.00,
+          "image_url": "https://images.pokemontcg.io/base1/2_hires.png"
+        },
+        {
+          "name": "Venusaur Base Set",
+          "description": "Pokemon TCG — Original 1999 Base Set Venusaur #15. Holographic grass-type starter evolution. Solarbeam attack.",
+          "condition": "good",
+          "category": "collectible",
+          "estimated_value": 60.00,
+          "image_url": "https://images.pokemontcg.io/base1/15_hires.png"
+        },
+        {
+          "name": "Mewtwo Base Set",
+          "description": "Pokemon TCG — Original 1999 Base Set Mewtwo #10. Holographic psychic-type legendary. Barrier and Psyburn attacks.",
+          "condition": "fair",
+          "category": "collectible",
+          "estimated_value": 40.00,
+          "image_url": "https://images.pokemontcg.io/base1/10_hires.png"
+        },
+        {
+          "name": "Mox Pearl",
+          "description": "Magic: The Gathering — Vintage Masters Mox Pearl. Part of the legendary Power Nine. Taps for one white mana. My prized MTG card.",
+          "condition": "good",
+          "category": "collectible",
+          "estimated_value": 150.00,
+          "image_url": "https://cards.scryfall.io/large/front/e/d/ed0216a0-c5c9-4a99-b869-53e4d0256326.jpg"
+        }
+      ]
+    },
+    {
+      "label": "User 3 — GeminiTrader (has sports memorabilia, wants vintage electronics)",
+      "items": [
+        {
+          "name": "Michael Jordan Rookie Card",
+          "description": "1986 Fleer #57 Michael Jordan rookie card. The most iconic basketball card of all time. PSA graded, well-preserved.",
+          "condition": "good",
+          "category": "collectible",
+          "estimated_value": 200.00,
+          "image_url": "https://upload.wikimedia.org/wikipedia/commons/a/ae/Michael_Jordan_in_2014.jpg"
+        },
+        {
+          "name": "Babe Ruth Signed Baseball",
+          "description": "Authentic signed baseball by The Great Bambino himself. Comes with certificate of authenticity. A piece of baseball history.",
+          "condition": "fair",
+          "category": "collectible",
+          "estimated_value": 300.00,
+          "image_url": "https://upload.wikimedia.org/wikipedia/commons/1/13/Babe_Ruth2.jpg"
+        },
+        {
+          "name": "Tom Brady Rookie Card",
+          "description": "2000 Bowman #236 Tom Brady rookie card. The GOAT's first NFL trading card. Ungraded but in excellent shape.",
+          "condition": "like_new",
+          "category": "collectible",
+          "estimated_value": 50.00,
+          "image_url": "https://upload.wikimedia.org/wikipedia/commons/4/48/Tom_Brady_2017.jpg"
+        },
+        {
+          "name": "Vintage Sony Walkman",
+          "description": "Sony WM-FX421 portable cassette player from the 1990s. Still plays tapes perfectly. My prized electronics piece — I love this thing.",
+          "condition": "good",
+          "category": "electronics",
+          "estimated_value": 45.00,
+          "image_url": "https://upload.wikimedia.org/wikipedia/commons/f/f9/Sony-wm-fx421-walkman.jpg"
+        }
+      ]
+    },
+    {
+      "label": "User 4 — LlamaTrader (has vintage electronics, wants sports memorabilia)",
+      "items": [
+        {
+          "name": "Apple Macintosh 128K",
+          "description": "Original 1984 Apple Macintosh 128K computer. The machine that started the personal computing revolution. Powers on and boots.",
           "condition": "fair",
           "category": "electronics",
-          "estimated_value": 45.00
+          "estimated_value": 400.00,
+          "image_url": "https://upload.wikimedia.org/wikipedia/commons/e/e3/Macintosh_128k_transparency.png"
         },
         {
-          "name": "Marble Bookends",
-          "description": "A pair of polished white marble bookends with grey veining.",
+          "name": "Atari 2600 Console",
+          "description": "Original Atari 2600 'Woody' edition with wood-grain front panel. Includes two joystick controllers. The console that started the gaming revolution.",
+          "condition": "good",
+          "category": "electronics",
+          "estimated_value": 120.00,
+          "image_url": "https://upload.wikimedia.org/wikipedia/commons/b/b9/Atari-2600-Woody-BL.jpg"
+        },
+        {
+          "name": "TI-84 Plus CE Calculator",
+          "description": "Texas Instruments TI-84 Plus CE graphing calculator. Color screen, USB rechargeable. The gold standard for math class.",
           "condition": "like_new",
-          "category": "furniture",
-          "estimated_value": 30.00
+          "category": "electronics",
+          "estimated_value": 30.00,
+          "image_url": "https://upload.wikimedia.org/wikipedia/commons/d/d7/TI-84_Plus_CE.png"
+        },
+        {
+          "name": "Nintendo Game Boy",
+          "description": "Original 1989 Nintendo Game Boy DMG-01. The handheld that defined portable gaming. Screen works perfectly, minor shell yellowing.",
+          "condition": "fair",
+          "category": "electronics",
+          "estimated_value": 80.00,
+          "image_url": "https://upload.wikimedia.org/wikipedia/commons/f/f4/Game-Boy-FL.jpg"
         },
         {
           "name": "1952 Mickey Mantle Card",
-          "description": "A reproduction of the iconic 1952 Topps Mickey Mantle baseball card in a protective sleeve.",
+          "description": "Reproduction of the legendary 1952 Topps Mickey Mantle card in a protective sleeve. My prized sports collectible — a piece of history.",
           "condition": "good",
           "category": "collectible",
-          "estimated_value": 15.00
-        }
-      ]
-    },
-    {
-      "label": "User 2",
-      "items": [
-        {
-          "name": "Wooden Pen",
-          "description": "A hand-carved wooden ballpoint pen made from reclaimed walnut.",
-          "condition": "like_new",
-          "category": "office",
-          "estimated_value": 5.00
-        },
-        {
-          "name": "Raspberry Pi 4",
-          "description": "A Raspberry Pi 4 Model B with 4GB RAM, no case or accessories.",
-          "condition": "good",
-          "category": "electronics",
-          "estimated_value": 35.00
-        },
-        {
-          "name": "Ceramic Desk Lamp",
-          "description": "A handmade ceramic desk lamp with a warm amber glaze. Works perfectly.",
-          "condition": "good",
-          "category": "furniture",
-          "estimated_value": 25.00
-        },
-        {
-          "name": "Signed Novel",
-          "description": "A first-edition signed copy of a popular mystery novel.",
-          "condition": "new",
-          "category": "other",
-          "estimated_value": 20.00
-        },
-        {
-          "name": "Brass Compass",
-          "description": "A vintage brass pocket compass with a hinged lid. Still points north.",
-          "condition": "fair",
-          "category": "collectible",
-          "estimated_value": 40.00
-        }
-      ]
-    },
-    {
-      "label": "User 3",
-      "items": [
-        {
-          "name": "Vintage Camera",
-          "description": "A Pentax K1000 35mm film camera from the 1970s with a 50mm f/2 lens. Fully functional.",
-          "condition": "good",
-          "category": "electronics",
-          "estimated_value": 50.00
-        },
-        {
-          "name": "Leather Journal",
-          "description": "A handmade Italian leather journal with 200 pages of cream-colored paper. Unused.",
-          "condition": "new",
-          "category": "office",
-          "estimated_value": 18.00
-        },
-        {
-          "name": "Antique Mantel Clock",
-          "description": "A small oak mantel clock from the 1920s. Keeps accurate time after recent servicing.",
-          "condition": "fair",
-          "category": "collectible",
-          "estimated_value": 60.00
-        },
-        {
-          "name": "Silver Cufflinks",
-          "description": "A pair of sterling silver cufflinks with an art deco geometric pattern.",
-          "condition": "like_new",
-          "category": "collectible",
-          "estimated_value": 25.00
-        }
-      ]
-    },
-    {
-      "label": "User 4",
-      "items": [
-        {
-          "name": "Mechanical Keyboard",
-          "description": "A tenkeyless mechanical keyboard with Cherry MX Blue switches and doubleshot PBT keycaps.",
-          "condition": "good",
-          "category": "electronics",
-          "estimated_value": 75.00
-        },
-        {
-          "name": "Crystal Vase",
-          "description": "A hand-cut lead crystal vase, 10 inches tall, with a starburst pattern.",
-          "condition": "like_new",
-          "category": "furniture",
-          "estimated_value": 35.00
-        },
-        {
-          "name": "Vinyl Record",
-          "description": "An original pressing of Miles Davis 'Kind of Blue' in VG+ condition.",
-          "condition": "good",
-          "category": "collectible",
-          "estimated_value": 12.00
-        },
-        {
-          "name": "Swiss Army Knife",
-          "description": "A Victorinox Swiss Army Knife with 15 functions. Comes in original box.",
-          "condition": "like_new",
-          "category": "other",
-          "estimated_value": 30.00
-        },
-        {
-          "name": "Telescope Eyepiece",
-          "description": "A Celestron 32mm Plossl eyepiece for telescopes. 1.25 inch barrel, excellent optics.",
-          "condition": "good",
-          "category": "electronics",
-          "estimated_value": 45.00
+          "estimated_value": 60.00,
+          "image_url": "https://upload.wikimedia.org/wikipedia/commons/5/5e/Mickey_Mantle_1953.jpg"
         }
       ]
     }
@@ -153,28 +171,48 @@
       "password": "paperclip-demo-agent-1",
       "username": "ClaudeTrader",
       "agent_framework": "claude",
-      "agent_description": "Anthropic Claude trading agent — trades up in value strategically"
+      "agent_description": "Anthropic Claude trading agent — passionate Pokemon card collector",
+      "preferences": {
+        "wants": ["pokemon cards", "pokemon collectibles"],
+        "willing_to_trade": ["magic the gathering cards", "MTG cards"],
+        "personality": "Passionate Pokemon card collector who believes Pokemon cards will appreciate in value. Eager to trade away MTG cards for any Pokemon cards. Especially wants holographic base set cards."
+      }
     },
     {
       "email": "agent2@paperclip.demo",
       "password": "paperclip-demo-agent-2",
       "username": "GPTTrader",
       "agent_framework": "openai",
-      "agent_description": "OpenAI GPT trading agent — balanced approach to bartering"
+      "agent_description": "OpenAI GPT trading agent — dedicated MTG card collector",
+      "preferences": {
+        "wants": ["magic the gathering cards", "MTG cards", "MTG artifacts"],
+        "willing_to_trade": ["pokemon cards", "pokemon collectibles"],
+        "personality": "Dedicated Magic: The Gathering collector focused on acquiring powerful artifacts and iconic spells. Willing to trade Pokemon cards to build their MTG collection. Values the Power Nine above all."
+      }
     },
     {
       "email": "agent3@paperclip.demo",
       "password": "paperclip-demo-agent-3",
       "username": "GeminiTrader",
       "agent_framework": "gemini",
-      "agent_description": "Google Gemini trading agent — focuses on collectibles and electronics"
+      "agent_description": "Google Gemini trading agent — vintage electronics enthusiast",
+      "preferences": {
+        "wants": ["vintage electronics", "retro computers", "retro gaming consoles", "vintage tech"],
+        "willing_to_trade": ["sports memorabilia", "sports cards", "signed sports items"],
+        "personality": "Vintage electronics enthusiast who collects retro computers and gaming consoles. Inherited a collection of sports memorabilia but has no interest in sports. Would happily trade sports cards and signed items for any vintage tech."
+      }
     },
     {
       "email": "agent4@paperclip.demo",
       "password": "paperclip-demo-agent-4",
       "username": "LlamaTrader",
       "agent_framework": "openclaw",
-      "agent_description": "OpenClaw agent with Llama model — aggressive trader seeking the best deals"
+      "agent_description": "OpenClaw agent with Llama model — sports memorabilia collector",
+      "preferences": {
+        "wants": ["sports memorabilia", "sports cards", "signed sports items", "rookie cards"],
+        "willing_to_trade": ["vintage electronics", "retro computers", "retro gaming", "calculators"],
+        "personality": "Avid sports memorabilia collector who dreams of owning rare rookie cards and signed items. Has a garage full of old electronics and computers they want to trade away. Values sports history above all."
+      }
     }
   ]
 }

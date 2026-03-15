@@ -34,6 +34,7 @@ This loop lets users (especially AI agents) trade continuously without waiting f
 | **Cash Out** | Converting a Woo back into its physical item by requesting the warehouse to ship it. The Woo is burned upon shipment. |
 | **Agent** | An AI model (OpenClaw, Claude, GPT, or any framework) trading autonomously on a user's behalf via the API. |
 | **Agent Key** | An API key scoped with permissions and rate limits that authenticates an agent's actions. |
+| **Subject Value** | A user's personal preferences for what they find valuable. Different users value different categories of items (e.g., one user values Pokemon cards while another values MTG cards). Agents use subject value preferences to decide which items to swipe right on, what to chat about, and which trades to approve. |
 
 ---
 
@@ -123,6 +124,7 @@ Extends Supabase Auth `auth.users`. Created via trigger on user signup.
 | `is_agent` | `boolean` | `true` if this account is operated by an AI agent |
 | `agent_framework` | `text` | e.g. `openclaw`, `langchain`, `custom` (nullable) |
 | `agent_description` | `text` | Public description of what the agent does (nullable) |
+| `agent_preferences` | `jsonb` | Structured agent config: `{ wants, willing_to_trade, personality, swipe_model, chat_model }` |
 | `created_at` | `timestamptz` | |
 | `updated_at` | `timestamptz` | |
 
@@ -328,7 +330,16 @@ All tables have RLS enabled. Key policies:
 - Warehouse staff can read their own staff records.
 - Admin server actions use the service-role client to bypass RLS for warehouse operations (after verifying staff membership).
 
-### 5.15 Shared Trading Logic (`lib/trading.ts`)
+### 5.15 Storage Buckets
+
+| Bucket | Public | Purpose |
+|---|---|---|
+| `item-photos` | Yes | Photos uploaded during intake |
+| `avatars` | Yes | User profile avatars |
+
+**Avatars RLS**: Authenticated users upload to `avatars/{user_id}/`, anyone can view, users can delete their own.
+
+### 5.16 Shared Trading Logic (`lib/trading.ts`)
 
 Core trading functions are extracted into `lib/trading.ts`, parameterised by `userId` and using the admin client (service-role) to bypass RLS. This allows both the UI's server actions and the MCP server's tool handlers to share the same business logic:
 
@@ -337,7 +348,7 @@ Core trading functions are extracted into `lib/trading.ts`, parameterised by `us
 
 Functions: `getActiveWoos`, `getSwipeFeed`, `recordSwipe`, `getMatches`, `getMatchDetails`, `getMessages`, `sendMessage`, `proposeTrade`, `approveTrade`, `cancelTrade`, `dismissMatch`, `getActiveWoosForTrade`.
 
-### 5.16 Agent Key Authentication (`lib/agent-auth.ts`)
+### 5.17 Agent Key Authentication (`lib/agent-auth.ts`)
 
 - `validateAgentKey(key)`: SHA-256 hashes the key with `AGENT_KEY_SALT`, looks up `agent_keys` where `key_hash` matches and `is_active = true`. Returns `{ userId, keyId, permissions, rateLimit, dailyTradeLimit }` or null. Updates `last_used_at` on successful validation.
 - `createAgentKey(userId, name, permissions)`: Generates a random key with `pc_live_` prefix, hashes and stores it. Returns the plain key (shown once).
@@ -646,7 +657,7 @@ Pages marked with `*` are not yet implemented.
 | `/matches` | Implemented | List of active matches with hex thumbnails, last message preview, counterparty info, time ago |
 | `/matches/:id` | Implemented | Real-time chat (Supabase Realtime Broadcast), trade proposal/approval cards, system messages, auto-scroll |
 | `/woos/:id` | Implemented | Woo detail page with image gallery, item condition, warehouse location, and Cash Out CTA |
-| `/settings` | * | Profile settings, agent key management, trading preferences |
+| `/settings` | Implemented | Profile settings (avatar, username), AI agent config (framework, personality, wants, willing_to_trade, model selection) |
 | `/settings/agents` | * | Create/revoke agent keys, set permissions, view agent activity logs |
 | `/admin/warehouse` | Implemented | Admin overview: pending intakes, stored items, cash outs, capacity usage |
 | `/admin/warehouse/intakes` | Implemented | Intake processing: receive, verify, mint Woo |
@@ -794,7 +805,7 @@ paperclip/
 │   │   └── auth/
 │   │       └── page.tsx            # Sign in / sign up
 │   ├── (dashboard)/
-│   │   ├── layout.tsx              # Dashboard nav layout (Dashboard, Intake, Swipe, Matches, Cash Out)
+│   │   ├── layout.tsx              # Dashboard nav layout (Dashboard, Intake, Swipe, Matches, Cash Out, Settings)
 │   │   ├── dashboard/
 │   │   │   ├── page.tsx            # User dashboard (hex Woo grid, compact user bar)
 │   │   │   ├── sign-out-button.tsx
@@ -828,7 +839,11 @@ paperclip/
 │   │   ├── woos/
 │   │   │   └── [id]/
 │   │   │       └── page.tsx        # Woo detail page (images, item info, warehouse, cash out CTA)
-│   │   └── settings/               # * Profile and agent key settings
+│   │   ├── settings/
+│   │   │   ├── page.tsx            # Settings page (profile + agent config)
+│   │   │   ├── profile-form.tsx    # Profile form (avatar upload, username)
+│   │   │   ├── agent-config-form.tsx # Agent config form (framework, personality, wants, models)
+│   │   │   └── actions.ts          # Server actions: updateProfile, uploadAvatar, updateAgentConfig
 │   ├── (admin)/
 │   │   ├── layout.tsx              # Admin layout with staff auth check and nav
 │   │   └── admin/
@@ -881,14 +896,15 @@ paperclip/
 │   │   ├── 20250314000006_match_cleanup.sql       # trade_unavailable/dismissed statuses, sibling match cleanup
 │   │   ├── 20250314000007_swipe_filters.sql       # Add condition to woos, swipe feed filters + value-based ordering
 │   │   ├── 20250314000008_multi_woo_trades.sql    # trade_woos join table for N:M trades
-│   │   └── 20250314000009_drop_old_swipe_feed.sql # Drop old 3-param get_swipe_feed overload
-│   ├── seed-data.json              # Configurable seed items for test users (read by scripts/seed.ts)
+│   │   ├── 20250314000009_drop_old_swipe_feed.sql # Drop old 3-param get_swipe_feed overload
+│   │   └── 20250315000001_agent_preferences.sql  # agent_preferences jsonb column + avatars storage bucket
+│   ├── seed-data.json              # Themed seed items (Pokemon, MTG, sports, electronics) with real images and user preferences
 │   └── seed.sql                    # Seed data (warehouses)
 ├── agents/
-│   ├── runner.ts                  # Main orchestrator: launches 4 browsers, round-robin trading
-│   ├── config.ts                  # Agent configuration (credentials, LLM settings)
-│   ├── llm-adapter.ts             # Common LLM interface + prompt builders
-│   ├── browser-agent.ts           # Playwright page interaction helpers
+│   ├── runner.ts                  # Main orchestrator: launches browsers, round-robin trading, keyword filtering, auto-approve
+│   ├── config.ts                  # Agent configuration: DB preferences -> seed-data.json fallback, tiered model selection
+│   ├── llm-adapter.ts             # Common LLM interface + split system/user prompt builders (compact + full preferences)
+│   ├── browser-agent.ts           # Playwright page interaction helpers (DOM reading for Woos, chat, trade state)
 │   └── adapters/
 │       ├── claude.ts              # Anthropic Claude adapter
 │       ├── openai.ts              # OpenAI GPT adapter
@@ -934,9 +950,46 @@ The script is **re-runnable**: it deletes all previously seeded data (including 
 
 ### 14.3 Seed Data Configuration
 
-Item definitions live in `supabase/seed-data.json` as an `item_groups` array (4 groups for 4 users). Each group has a `label` (for console output) and an `items` array. Each item has `name`, `description`, `condition`, `category`, and `estimated_value`.
+Item definitions live in `supabase/seed-data.json` as an `item_groups` array (4 groups for 4 users). Each group has a `label` (for console output) and an `items` array. Each item has `name`, `description`, `condition`, `category`, `estimated_value`, and an optional `image_url` for real product images (falls back to `placehold.co` text placeholder if not provided).
 
-The file also contains a `demo_users` array with email, password, username, agent_framework, and agent_description for 4 demo agent accounts. These are used when running `pnpm seed:demo`.
+The file also contains a `demo_users` array with email, password, username, agent_framework, agent_description, and `preferences` for 4 demo agent accounts. These are used when running `pnpm seed:demo`.
+
+#### Subject Value and Trading Pairs
+
+Seed items are designed around **subject value** — each user owns items they don't personally value and wants items from categories they do value. This creates natural trading pairs:
+
+| Agent | Owns (willing to trade) | Wants (subject value) |
+|---|---|---|
+| ClaudeTrader | MTG cards (Black Lotus, Lightning Bolt, Sol Ring) | Pokemon cards |
+| GPTTrader | Pokemon cards (Charizard, Blastoise, Venusaur, Mewtwo) | MTG cards |
+| GeminiTrader | Sports memorabilia (Jordan, Babe Ruth, Brady cards) | Vintage electronics |
+| LlamaTrader | Vintage electronics (Macintosh, Atari, Game Boy, TI-84) | Sports memorabilia |
+
+Each user also has one "prized possession" from their valued category that they'd prefer not to trade (e.g., ClaudeTrader's Pikachu Base Set, GPTTrader's Mox Pearl).
+
+#### User Preferences Object
+
+Each `demo_user` in `seed-data.json` has a `preferences` object:
+
+```json
+{
+  "wants": ["pokemon cards", "pokemon collectibles"],
+  "willing_to_trade": ["magic the gathering cards", "MTG cards"],
+  "personality": "Passionate Pokemon collector who believes Pokemon cards will appreciate in value..."
+}
+```
+
+Preferences are loaded by `agents/config.ts` at startup with a priority chain: **DB `profiles.agent_preferences`** -> **seed-data.json** -> **empty defaults**. Users can configure preferences via the `/settings` page, which persists to the `agent_preferences` jsonb column. The seed-data.json file serves as a fallback for demo accounts.
+
+#### Item Images
+
+Each seed item has an `image_url` field pointing to a real product image:
+- **Pokemon cards**: Pokemon TCG API (`images.pokemontcg.io`)
+- **MTG cards**: Scryfall API (`cards.scryfall.io`)
+- **Sports memorabilia**: Wikimedia Commons
+- **Vintage electronics**: Wikimedia Commons
+
+The seed script uses `image_url` when provided, falling back to `placehold.co` text placeholders.
 
 To add or change seed items, edit `seed-data.json` and run `pnpm seed` again.
 
@@ -953,7 +1006,7 @@ Running `pnpm seed:demo` (equivalent to `tsx scripts/seed.ts --create-users`) do
 
 - Items assigned to PaperClip West warehouse (status `stored`, `verified: true`)
 - Active Woos mirroring each item's fields
-- Placeholder images via `placehold.co`
+- Real product images from Pokemon TCG API, Scryfall, and Wikimedia Commons (or `placehold.co` fallback)
 - **No** swipes, matches, messages, or trades (these are cleaned up on each run)
 - (Demo mode only) 4 agent user accounts with agent keys
 
@@ -961,24 +1014,65 @@ Running `pnpm seed:demo` (equivalent to `tsx scripts/seed.ts --create-users`) do
 
 ## 15. Agent Demo
 
-The agent demo launches 4 browser windows, each logged into a different PaperClip user, with a different LLM model making trading decisions. The orchestrator round-robins through each agent, performing swipes, chatting, and executing trades visually.
+The agent demo launches 4 browser windows, each logged into a different PaperClip user, with a different LLM model making trading decisions. The orchestrator round-robins through each agent, performing swipes, chatting, and executing trades visually. Each agent is driven by **subject value preferences** — personal interests that determine which items they want and which they're willing to trade away.
 
 ### 15.1 Architecture
 
 ```
 Agent Runner (agents/runner.ts)
-├── Browser 1 — ClaudeTrader (Anthropic Claude)
-├── Browser 2 — GPTTrader (OpenAI GPT-4o)
-├── Browser 3 — GeminiTrader (Google Gemini 2.5)
-└── Browser 4 — LlamaTrader (Groq/Llama 3.3)
+├── Browser 1 — ClaudeTrader (Anthropic Claude) — wants Pokemon, trades MTG
+├── Browser 2 — GPTTrader (OpenAI GPT-4o) — wants MTG, trades Pokemon
+├── Browser 3 — GeminiTrader (Google Gemini 2.5) — wants vintage electronics, trades sports
+└── Browser 4 — LlamaTrader (Groq/Llama 3.3) — wants sports memorabilia, trades electronics
 ```
 
 Each agent has:
 - A Playwright browser instance (headful, positioned in a 2x2 grid)
-- An LLM adapter that implements `decideSwipe()`, `generateMessage()`, and `decideTrade()`
+- An LLM adapter that implements `decideSwipe()`, `decideBatchSwipe()`, `generateMessage()`, and `decideTrade()`
 - A phase state machine: swipe -> matches -> chat -> repeat
+- **Subject value preferences** loaded from DB (with seed-data.json fallback) and injected into all LLM prompts
+- **Tiered models**: cheap classification model for swipe/trade, smarter generation model for chat
 
-### 15.2 Running the Demo
+### 15.2 Subject Value and Preference-Driven Trading
+
+Agents incorporate the user's **subject value** into every decision:
+
+- **Swipe**: Keyword pre-filtering first checks if the card title/description matches `wants` (auto-RIGHT) or `willing_to_trade` (auto-LEFT). Only ambiguous cards go to the LLM, using compact preferences (~15 tokens) in the system prompt.
+- **Chat**: Agents discuss WHY they want the other party's item, referencing their full personality. The LLM generates natural, preference-aware conversation using the smarter chat model.
+- **Trade approval**: Auto-approve when receiving items matching `wants` keywords. Only ambiguous trades go to the LLM for evaluation.
+
+### 15.3 Chat-Driven Trade Proposals
+
+Instead of immediately proposing a trade after the first message, agents now:
+
+1. Read actual chat messages from the DOM (via `browser-agent.ts`)
+2. Pass full chat history and preferences to the LLM
+3. The LLM signals trade readiness by appending `[PROPOSE]` to its message
+4. Only propose when the LLM determines both parties seem ready
+5. Auto-propose after 4+ messages as a fallback to keep the demo moving
+
+### 15.4 Token Optimizations
+
+Several strategies reduce LLM API costs by ~70-85%:
+
+- **System prompt caching**: Prompt builders return `{ system, user }` instead of a single string. The system message (role + preferences) is static across sequential calls for the same agent, enabling Anthropic's automatic prompt caching (90% cost reduction on cached tokens).
+- **Compact preferences**: Swipe/trade prompts use a concise format (`"Wants: X. Trading away: Y."` ~15 tokens) instead of the full personality (~80 tokens). Chat prompts use the full format.
+- **Stripped descriptions**: Swipe prompts omit item descriptions — title + category + condition + value is sufficient for classification. Saves ~20-40 tokens per call.
+- **Tiered models**: Each adapter has a `classificationModel` (cheap) and `generationModel` (smart). Swipe and trade decisions use the classification model; chat uses the generation model.
+- **Keyword pre-filtering**: Before calling the LLM, check card text against `wants` (auto-RIGHT) and `willing_to_trade` (auto-LEFT) keywords. Eliminates ~70-80% of swipe LLM calls.
+- **Auto-approve trades**: When receiving items matching `wants` keywords, skip the LLM trade decision entirely.
+- **Lower maxTokens**: Chat responses capped at 100 tokens (1-2 sentences); swipe/trade at 10.
+
+| Adapter | Classification Model | Generation Model |
+|---|---|---|
+| Claude | claude-haiku-4-20250514 | claude-sonnet-4-20250514 |
+| OpenAI | gpt-4o-mini | gpt-4o |
+| Gemini | gemini-2.0-flash-lite | gemini-2.5-flash |
+| Groq | llama-3.1-8b-instant | llama-3.3-70b-versatile |
+
+Model selection is configurable per user via `/settings` (persisted in `profiles.agent_preferences`).
+
+### 15.5 Running the Demo
 
 ```bash
 # 1. Seed the database with 4 demo users and items
@@ -998,22 +1092,23 @@ cp .agents.env.example .agents.env
 pnpm agents
 ```
 
-### 15.3 LLM Adapters
+### 15.6 LLM Adapters
 
 Each adapter implements the `AgentLLM` interface from `agents/llm-adapter.ts`:
 
-- `decideSwipe(myWoo, targetWoo)` → `"left"` or `"right"`
-- `generateMessage(chatContext)` → chat message string
-- `decideTrade(tradeContext)` → `true` (approve) or `false` (decline)
+- `decideSwipe(myWoo, targetWoo, preferences)` → `"left"` or `"right"` (uses classification model)
+- `decideBatchSwipe(myWoo, targets[], preferences)` → `("left" | "right")[]` (uses classification model)
+- `generateMessage(chatContext)` → chat message string (may end with `[PROPOSE]`, uses generation model)
+- `decideTrade(tradeContext)` → `true` (approve) or `false` (decline, uses classification model)
 
-Prompts are built by shared functions (`buildSwipePrompt`, `buildChatPrompt`, `buildTradePrompt`) and sent to the LLM for simple structured responses.
+All methods receive the agent's `AgentPreferences` and use split system/user prompts built by shared functions (`buildSwipeMessages`, `buildChatMessages`, `buildTradeMessages`). Each adapter accepts `generationModel` and `classificationModel` in its constructor, with sensible defaults.
 
-| Adapter | Provider | Model | Package |
-|---|---|---|---|
-| `ClaudeAdapter` | Anthropic | claude-sonnet-4-20250514 | `@anthropic-ai/sdk` |
-| `OpenAIAdapter` | OpenAI | gpt-4o | `openai` |
-| `GeminiAdapter` | Google | gemini-2.5-flash | `@google/generative-ai` |
-| `GroqAdapter` | Groq | llama-3.3-70b-versatile | `openai` (compatible API) |
+| Adapter | Provider | Classification Model | Generation Model | Package |
+|---|---|---|---|---|
+| `ClaudeAdapter` | Anthropic | claude-haiku-4-20250514 | claude-sonnet-4-20250514 | `@anthropic-ai/sdk` |
+| `OpenAIAdapter` | OpenAI | gpt-4o-mini | gpt-4o | `openai` |
+| `GeminiAdapter` | Google | gemini-2.0-flash-lite | gemini-2.5-flash | `@google/generative-ai` |
+| `GroqAdapter` | Groq | llama-3.1-8b-instant | llama-3.3-70b-versatile | `openai` (compatible API) |
 
 ---
 
@@ -1048,6 +1143,13 @@ Prompts are built by shared functions (`buildSwipePrompt`, `buildChatPrompt`, `b
 - ~~OpenClaw skill~~ Implemented at `openclaw-skill/` with manifest, strategy, and README
 - ~~Core trading logic extraction~~ `lib/trading.ts` with shared business logic used by both server actions and MCP
 - ~~Browser automation demo~~ `agents/` with Playwright runner, 4 LLM adapters (Claude, GPT, Gemini, Groq/Llama)
+- ~~Subject value preferences~~ Agents load per-user preferences from `seed-data.json` and inject them into all LLM prompts (swipe, chat, trade)
+- ~~Chat-driven trade proposals~~ Agents read chat messages from the DOM, pass full context to the LLM, and only propose trades when the LLM signals readiness (or after 4+ messages as fallback)
+- ~~Real Woo/chat DOM reading~~ Agents read actual Woo info (title, value) and chat messages from the page instead of using placeholders
+- ~~Token optimization~~ System prompt caching, tiered models (classification vs generation), keyword pre-filtering, auto-approve, compact preferences, stripped descriptions, lower maxTokens
+- ~~User settings page~~ `/settings` page for profile (avatar, username) and AI agent configuration (framework, personality, wants, willing_to_trade, model selection)
+- ~~DB-backed preferences~~ `profiles.agent_preferences` jsonb column, loaded by agents with seed-data.json fallback
+- ~~Avatars storage~~ `avatars` Supabase Storage bucket with RLS
 - A2A Agent Card (pending)
 - Rate limiting and safety controls (pending)
 
@@ -1065,6 +1167,9 @@ Prompts are built by shared functions (`buildSwipePrompt`, `buildChatPrompt`, `b
 - JSON-configurable item definitions (`supabase/seed-data.json`) with positional item groups
 - Deterministic UUIDs derived from real user UUIDs for clean delete-then-reinsert
 - `pnpm seed` script for quick re-seeding (cleans up swipes, matches, trades between runs)
+- Subject-value-themed seed items: Pokemon cards, MTG cards, sports memorabilia, vintage electronics
+- Real product images from Pokemon TCG API, Scryfall, and Wikimedia Commons
+- Per-user `preferences` object (wants, willing_to_trade, personality) loaded by agents at runtime
 
 ### Phase 6: Polish
 - Landing page (basic version exists)
