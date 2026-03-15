@@ -825,11 +825,14 @@ paperclip/
 │   ├── config.toml                 # Supabase CLI config
 │   ├── migrations/
 │   │   ├── 20250314000000_initial_schema.sql      # All tables, functions, RLS, indexes
-│   │   ├── 20250314000001_seed_warehouses.sql     # 3 seed warehouses
+│   │   ├── 20250314000001_seed_warehouses.sql     # 1 seed warehouse (PaperClip West)
 │   │   ├── 20250314000002_warehouse_staff.sql     # warehouse_staff table, admin RLS, mint_woo
 │   │   ├── 20250314000003_swipe_feed_function.sql # get_swipe_feed() DB function
 │   │   └── 20250314000004_user_estimated_value.sql # Move estimated_value from admin mint to user intake
+│   ├── seed-data.json              # Configurable seed items for test users (read by scripts/seed.ts)
 │   └── seed.sql                    # Seed data (warehouses)
+├── scripts/
+│   └── seed.ts                    # Re-runnable seed script: creates test users, items, and Woos
 ├── middleware.ts                   # Auth middleware (protects /dashboard, /admin, etc.)
 ├── CLAUDE.md                       # This file
 ├── package.json
@@ -840,7 +843,44 @@ paperclip/
 
 ---
 
-## 14. Development Phases
+## 14. Seed Data
+
+The project includes a re-runnable seed system for local development. It populates the database with two test users and their fully minted Woos, providing a clean starting point for testing the swipe/match/trade flow.
+
+### 14.1 Running the Seed
+
+```bash
+pnpm seed
+```
+
+Requires a running local Supabase instance (`supabase start`). The script targets `http://127.0.0.1:54321` by default. Override with `SEED_SUPABASE_URL` and `SEED_SUPABASE_SERVICE_ROLE_KEY` env vars if needed.
+
+The script is **re-runnable**: it deletes all previously seeded data (including any swipes, matches, and trades created during testing) before reinserting, so `supabase db reset` is not required between runs. Edit `supabase/seed-data.json` and re-run `pnpm seed` at any time.
+
+### 14.2 Test Users
+
+| User | Email | Password | UUID |
+|---|---|---|---|
+| alice | `alice@test.com` | `password123` | `aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa` |
+| bob | `bob@test.com` | `password123` | `bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb` |
+
+### 14.3 Seed Data Configuration
+
+Item definitions live in `supabase/seed-data.json`. Each user has an array of items with `name`, `description`, `condition`, `category`, and `estimated_value`. The seed script creates corresponding `items` (status `stored`, verified) and `woos` (status `active`) using deterministic UUIDs derived from the user key and item index.
+
+To add or change seed items, edit `seed-data.json` and run `pnpm seed` again.
+
+### 14.4 What Gets Seeded
+
+- Two auth users with auto-created profiles
+- Items assigned to PaperClip West warehouse (status `stored`, `verified: true`)
+- Active Woos mirroring each item's fields
+- Placeholder images via `placehold.co`
+- **No** swipes, matches, messages, or trades
+
+---
+
+## 15. Development Phases
 
 ### Phase 1: Foundation -- COMPLETE
 - Supabase project setup (database, auth, storage)
@@ -876,7 +916,13 @@ paperclip/
 - `mint_woo` database function for atomic Woo creation
 - Mock shipping label API at `/api/shipping-label`
 
-### Phase 5: Polish
+### Phase 5: Seed Data -- COMPLETE
+- Re-runnable TypeScript seed script (`scripts/seed.ts`) with deterministic UUIDs
+- JSON-configurable item definitions (`supabase/seed-data.json`)
+- Two test users (alice, bob) with 3-5 minted Woos each
+- `pnpm seed` script for quick re-seeding without `supabase db reset`
+
+### Phase 6: Polish
 - Landing page (basic version exists)
 - Responsive design pass
 - Error handling and loading states
