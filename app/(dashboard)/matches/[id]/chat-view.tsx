@@ -5,11 +5,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from "@/components/ui/select";
+import {
   Send,
   ArrowLeftRight,
   Loader2,
   Bot,
   ArrowLeft,
+  Plus,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -19,9 +32,9 @@ import {
   proposeTrade,
   getMatchDetails,
   getMessages,
+  getMyActiveWoosForTrade,
   type MatchDetail,
   type MessageInfo,
-  type TradeInfo,
 } from "../actions";
 import { TradeCard } from "./trade-card";
 
@@ -56,9 +69,189 @@ function MiniHex({ image, title }: { image?: string; title: string }) {
   );
 }
 
+function SmallHex({ image, title }: { image?: string; title: string }) {
+  return (
+    <div className="relative w-8 h-[37px] shrink-0">
+      <div
+        className="absolute inset-0 bg-border"
+        style={{ clipPath: HEX_CLIP }}
+      />
+      <div
+        className="absolute inset-[2px] overflow-hidden bg-muted"
+        style={{ clipPath: HEX_CLIP }}
+      >
+        {image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={image}
+            alt={title}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-muted-foreground text-[7px]">
+            ?
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function formatTime(dateStr: string): string {
   const d = new Date(dateStr);
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+type ProposalWoo = {
+  id: string;
+  title: string;
+  images: string[];
+  estimated_value: number | null;
+};
+
+function TradeProposalDialog({
+  open,
+  onOpenChange,
+  myMatchedWoo,
+  onPropose,
+  proposing,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  myMatchedWoo: ProposalWoo;
+  onPropose: (wooIds: string[]) => void;
+  proposing: boolean;
+}) {
+  const [myWoos, setMyWoos] = useState<ProposalWoo[]>([]);
+  const [selectedWooIds, setSelectedWooIds] = useState<string[]>([
+    myMatchedWoo.id,
+  ]);
+  const [loadingWoos, setLoadingWoos] = useState(false);
+  const [lastOpen, setLastOpen] = useState(false);
+
+  if (open && !lastOpen) {
+    setLastOpen(true);
+    setSelectedWooIds([myMatchedWoo.id]);
+    setLoadingWoos(true);
+    getMyActiveWoosForTrade().then((woos) => {
+      setMyWoos(
+        woos.map((w) => ({
+          id: w.id,
+          title: w.title,
+          images: w.images,
+          estimated_value: w.estimated_value,
+        }))
+      );
+      setLoadingWoos(false);
+    });
+  } else if (!open && lastOpen) {
+    setLastOpen(false);
+  }
+
+  const selectedWoos = myWoos.filter((w) => selectedWooIds.includes(w.id));
+  const availableToAdd = myWoos.filter(
+    (w) => !selectedWooIds.includes(w.id)
+  );
+  const combinedValue = selectedWoos.reduce(
+    (sum, w) => sum + (w.estimated_value ?? 0),
+    0
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogTitle>Propose Trade</DialogTitle>
+
+        <div className="space-y-4 pt-2">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Your Woos in this trade</label>
+
+            {loadingWoos ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {selectedWoos.map((w) => (
+                  <div
+                    key={w.id}
+                    className="flex items-center gap-2 rounded-lg border p-2"
+                  >
+                    <SmallHex image={w.images?.[0]} title={w.title} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{w.title}</p>
+                      {w.estimated_value != null && (
+                        <p className="text-xs text-muted-foreground">
+                          ${Number(w.estimated_value).toFixed(2)}
+                        </p>
+                      )}
+                    </div>
+                    {selectedWooIds.length > 1 && (
+                      <button
+                        onClick={() =>
+                          setSelectedWooIds((prev) =>
+                            prev.filter((id) => id !== w.id)
+                          )
+                        }
+                        className="p-1 rounded hover:bg-muted"
+                      >
+                        <X className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+
+                {availableToAdd.length > 0 && (
+                  <Select
+                    value=""
+                    onValueChange={(id) =>
+                      setSelectedWooIds((prev) => [...prev, id])
+                    }
+                  >
+                    <SelectTrigger className="w-full h-9 border-dashed">
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <Plus className="h-3.5 w-3.5" />
+                        <span className="text-sm">Add another Woo</span>
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableToAdd.map((w) => (
+                        <SelectItem key={w.id} value={w.id}>
+                          {w.title}
+                          {w.estimated_value != null &&
+                            ` ($${Number(w.estimated_value).toFixed(2)})`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {selectedWoos.length > 1 && (
+                  <p className="text-xs text-muted-foreground text-right">
+                    Combined value: ${combinedValue.toFixed(2)}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <Button
+            className="w-full"
+            onClick={() => onPropose(selectedWooIds)}
+            disabled={proposing || selectedWooIds.length === 0}
+          >
+            {proposing ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <ArrowLeftRight className="mr-2 h-4 w-4" />
+            )}
+            Propose Trade ({selectedWoos.length} Woo
+            {selectedWoos.length !== 1 ? "s" : ""})
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 export function ChatView({
@@ -75,6 +268,7 @@ export function ChatView({
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [proposing, setProposing] = useState(false);
+  const [showProposalDialog, setShowProposalDialog] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageIdsRef = useRef(new Set(initialMessages.map((m) => m.id)));
 
@@ -95,7 +289,18 @@ export function ChatView({
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  // Supabase Realtime Broadcast subscription
+  const refreshMatch = useCallback(async () => {
+    const [matchResult, messagesResult] = await Promise.all([
+      getMatchDetails(match.id),
+      getMessages(match.id),
+    ]);
+    if (matchResult.data) setMatch(matchResult.data);
+    if (messagesResult.data) {
+      setMessages(messagesResult.data);
+      messageIdsRef.current = new Set(messagesResult.data.map((m) => m.id));
+    }
+  }, [match.id]);
+
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase.channel(`match:${match.id}`, {
@@ -118,19 +323,7 @@ export function ChatView({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [match.id]);
-
-  async function refreshMatch() {
-    const [matchResult, messagesResult] = await Promise.all([
-      getMatchDetails(match.id),
-      getMessages(match.id),
-    ]);
-    if (matchResult.data) setMatch(matchResult.data);
-    if (messagesResult.data) {
-      setMessages(messagesResult.data);
-      messageIdsRef.current = new Set(messagesResult.data.map((m) => m.id));
-    }
-  }
+  }, [match.id, refreshMatch]);
 
   async function broadcastMessage(msg: MessageInfo) {
     const supabase = createClient();
@@ -179,17 +372,18 @@ export function ChatView({
     }
   }
 
-  async function handleProposeTrade() {
+  async function handleProposeTrade(wooIds: string[]) {
     if (proposing) return;
     setProposing(true);
 
     try {
-      const result = await proposeTrade(match.id);
+      const result = await proposeTrade(match.id, wooIds);
       if (result.error) {
         toast.error(result.error);
         return;
       }
       toast.success("Trade proposed!");
+      setShowProposalDialog(false);
       await refreshMatch();
       broadcastTradeUpdate();
     } finally {
@@ -243,7 +437,7 @@ export function ChatView({
             <Button
               size="sm"
               variant="outline"
-              onClick={handleProposeTrade}
+              onClick={() => setShowProposalDialog(true)}
               disabled={proposing}
             >
               {proposing ? (
@@ -297,8 +491,6 @@ export function ChatView({
                       trade={match.active_trade}
                       currentUserId={currentUserId}
                       userAId={match.user_a_id}
-                      wooATitle={match.woo_a?.title ?? "Woo A"}
-                      wooBTitle={match.woo_b?.title ?? "Woo B"}
                       onTradeUpdated={handleTradeUpdated}
                     />
                   </div>
@@ -393,6 +585,21 @@ export function ChatView({
             This Woo has been traded. This match is no longer available.
           </p>
         </div>
+      )}
+
+      {myWoo && (
+        <TradeProposalDialog
+          open={showProposalDialog}
+          onOpenChange={setShowProposalDialog}
+          myMatchedWoo={{
+            id: myWoo.id,
+            title: myWoo.title,
+            images: myWoo.images,
+            estimated_value: myWoo.estimated_value,
+          }}
+          onPropose={handleProposeTrade}
+          proposing={proposing}
+        />
       )}
     </div>
   );

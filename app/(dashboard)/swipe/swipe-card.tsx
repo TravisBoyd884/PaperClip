@@ -12,6 +12,14 @@ const categoryLabels: Record<string, string> = {
   other: "Other",
 };
 
+const conditionLabels: Record<string, string> = {
+  new: "New",
+  like_new: "Like New",
+  good: "Good",
+  fair: "Fair",
+  poor: "Poor",
+};
+
 export type SwipeDirection = "left" | "right" | null;
 
 export function SwipeCard({
@@ -86,6 +94,11 @@ export function SwipeCard({
           <Badge variant="outline">
             {categoryLabels[woo.category] || woo.category}
           </Badge>
+          {woo.condition && (
+            <Badge variant="outline" className="text-muted-foreground">
+              {conditionLabels[woo.condition] || woo.condition}
+            </Badge>
+          )}
           {woo.estimated_value != null && (
             <Badge variant="secondary">
               ${Number(woo.estimated_value).toFixed(2)}
