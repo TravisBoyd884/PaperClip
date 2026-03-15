@@ -8,11 +8,15 @@ function getScreenSize(): { width: number; height: number } {
   try {
     if (process.platform === "win32") {
       const out = execSync(
-        'powershell -NoProfile -Command "Get-CimInstance Win32_VideoController | Select-Object -First 1 CurrentHorizontalResolution,CurrentVerticalResolution | ForEach-Object { \\"$($_.CurrentHorizontalResolution),$($_.CurrentVerticalResolution)\\" }"',
+        "wmic path Win32_VideoController get CurrentHorizontalResolution,CurrentVerticalResolution /format:csv",
         { encoding: "utf-8" }
       );
-      const [w, h] = out.trim().split(",").map((s) => parseInt(s, 10));
-      if (w > 0 && h > 0) return { width: w, height: h };
+      for (const line of out.trim().split("\n")) {
+        const parts = line.trim().split(",");
+        const w = parseInt(parts[1], 10);
+        const h = parseInt(parts[2], 10);
+        if (w > 0 && h > 0) return { width: w, height: h };
+      }
     } else if (process.platform === "darwin") {
       const out = execSync(
         "system_profiler SPDisplaysDataType | grep Resolution",
@@ -30,7 +34,7 @@ function getScreenSize(): { width: number; height: number } {
 }
 
 const MAX_ROUNDS = 20;
-const SWIPES_PER_ROUND = 20;
+const SWIPES_PER_ROUND = 3;
 const INTER_ACTION_DELAY = 150;
 const MAX_CHAT_MESSAGES_BEFORE_AUTO_PROPOSE = 4;
 const BATCH_SIZE = 3;
