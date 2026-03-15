@@ -1,5 +1,5 @@
 import { execSync } from "child_process";
-import { chromium, type BrowserContext, type Page } from "playwright";
+import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import { loadAgentConfigs, getAppUrl, type AgentConfig } from "./config.js";
 import type { WooInfo, ChatContext } from "./llm-adapter.js";
 import * as browser from "./browser-agent.js";
@@ -43,8 +43,11 @@ const SIMILARITY_LEFT_THRESHOLD = 0.3;
 
 interface AgentState {
   config: AgentConfig;
+  browser: Browser;
   context: BrowserContext;
   page: Page;
+  index: number;
+  screen: { width: number; height: number };
   phase: "swipe" | "matches" | "chat";
   currentMatchId: string | null;
   swipesDone: number;
@@ -113,12 +116,10 @@ async function fetchCardEmbedding(cardInfo: WooInfo): Promise<number[] | null> {
   }
 }
 
-async function initAgent(
-  config: AgentConfig,
-  appUrl: string,
+async function launchBrowser(
   index: number,
   screen: { width: number; height: number }
-): Promise<AgentState> {
+): Promise<{ browser: Browser; context: BrowserContext; page: Page }> {
   const halfW = Math.floor(screen.width / 2);
   const halfH = Math.floor(screen.height / 2);
 
@@ -135,10 +136,24 @@ async function initAgent(
   });
   const page = await context.newPage();
 
+  return { browser: browserInstance, context, page };
+}
+
+async function initAgent(
+  config: AgentConfig,
+  appUrl: string,
+  index: number,
+  screen: { width: number; height: number }
+): Promise<AgentState> {
+  const { browser: browserInstance, context, page } = await launchBrowser(index, screen);
+
   return {
     config,
+    browser: browserInstance,
     context,
     page,
+    index,
+    screen,
     phase: "swipe",
     currentMatchId: null,
     swipesDone: 0,
@@ -146,6 +161,39 @@ async function initAgent(
     myWoo: null,
     chatMessageCount: 0,
   };
+}
+
+async function isPageAlive(page: Page): Promise<boolean> {
+  try {
+    page.url();
+    await page.evaluate(() => true);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function recoverAgent(agent: AgentState, appUrl: string): Promise<boolean> {
+  log(agent, "Browser closed — recovering...");
+  try {
+    await agent.context.close().catch(() => {});
+    await agent.browser.close().catch(() => {});
+  } catch {}
+
+  try {
+    const { browser: newBrowser, context, page } = await launchBrowser(agent.index, agent.screen);
+    agent.browser = newBrowser;
+    agent.context = context;
+    agent.page = page;
+    agent.myWoo = null;
+
+    await browser.login(page, appUrl, agent.config.email, agent.config.password);
+    log(agent, "Recovered — logged back in");
+    return true;
+  } catch (err) {
+    log(agent, `Recovery failed: ${err}`);
+    return false;
+  }
 }
 
 async function doSwipePhase(agent: AgentState, appUrl: string): Promise<void> {
@@ -460,6 +508,12 @@ async function runRound(agents: AgentState[], appUrl: string, round: number) {
 
   const results = await Promise.allSettled(
     agents.map(async (agent) => {
+      if (!(await isPageAlive(agent.page))) {
+        const recovered = await recoverAgent(agent, appUrl);
+        if (!recovered) throw new Error("Browser recovery failed");
+        agent.phase = "swipe";
+      }
+
       log(agent, `Starting phase: ${agent.phase}`);
       switch (agent.phase) {
         case "swipe":

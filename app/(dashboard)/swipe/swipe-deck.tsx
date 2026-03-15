@@ -3,13 +3,6 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -25,6 +18,7 @@ import {
   SlidersHorizontal,
   Plus,
   Search,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SwipeCard, type SwipeDirection } from "./swipe-card";
@@ -278,20 +272,30 @@ export function SwipeDeck({ woos }: { woos: UserWoo[] }) {
               ))}
             </div>
           )}
-          <Select value={primaryWooId} onValueChange={handlePrimaryChange}>
-            <SelectTrigger className="w-full max-w-xs">
-              <SelectValue placeholder="Select a Woo to offer..." />
-            </SelectTrigger>
-            <SelectContent>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="w-full max-w-xs justify-between gap-2 font-normal">
+                <span className="truncate">
+                  {selectedWoos[0]
+                    ? `${selectedWoos[0].title}${selectedWoos[0].estimated_value != null ? ` ($${Number(selectedWoos[0].estimated_value).toFixed(2)})` : ""}`
+                    : "Select a Woo to offer..."}
+                </span>
+                <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
               {woos.map((w) => (
-                <SelectItem key={w.id} value={w.id}>
+                <DropdownMenuItem
+                  key={w.id}
+                  onClick={() => handlePrimaryChange(w.id)}
+                >
                   {w.title}
                   {w.estimated_value != null &&
                     ` ($${Number(w.estimated_value).toFixed(2)})`}
-                </SelectItem>
+                </DropdownMenuItem>
               ))}
-            </SelectContent>
-          </Select>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

@@ -36,38 +36,44 @@ export async function navigateToMatches(page: Page, appUrl: string) {
 }
 
 export async function selectWoo(page: Page) {
+  // The Woo selector is a DropdownMenu with a Button trigger containing the Woo name or placeholder
   const trigger = page.locator('[role="combobox"]').first();
-  if (!(await trigger.count())) return;
+  const dropdownTrigger = page.locator('button:has-text("Select a Woo")').first();
+  const activeTrigger = (await trigger.count()) ? trigger : dropdownTrigger;
+  if (!(await activeTrigger.count())) return;
 
-  const currentText = await trigger.textContent();
+  const currentText = await activeTrigger.textContent();
   if (currentText && !currentText.includes("Select a Woo")) return;
 
-  await trigger.click();
+  await activeTrigger.click();
   await wait(300);
 
-  const firstOption = page.locator('[role="option"]').first();
-  if (await firstOption.count()) {
-    await firstOption.click();
+  const menuItem = page.locator('[role="menuitem"]').first();
+  const option = page.locator('[role="option"]').first();
+  const firstItem = (await menuItem.count()) ? menuItem : option;
+  if (await firstItem.count()) {
+    await firstItem.click();
     await wait(1000);
   }
 }
 
 export async function readSelectedWooInfo(page: Page): Promise<WooInfo | null> {
-  // On the swipe page, selected Woo info is shown in badge chips
-  // Format: "Title ($XX.XX)" in a Badge element
   const badge = page.locator('[data-slot="badge"]').first();
   if (!(await badge.count())) return null;
 
   const badgeText = await badge.textContent().catch(() => null);
   if (!badgeText) return null;
 
-  const titleMatch = badgeText.match(/^(.+?)(?:\s*\(\$[\d.]+\))?/);
+  // Greedy match: capture everything before the price suffix
+  const titleMatch = badgeText.match(/^(.+?)\s*\(\$[\d.]+\)/);
   const valueMatch = badgeText.match(/\$([\d.]+)/);
-  const title = titleMatch?.[1]?.trim() ?? badgeText.trim();
+  // If the price-pattern regex didn't match, the whole text (minus trailing whitespace) is the title
+  const title = titleMatch?.[1]?.trim() ?? badgeText.replace(/\s*\u00d7?\s*$/, "").trim();
   const value = valueMatch ? parseFloat(valueMatch[1]) : null;
 
-  // Also read the "Your Woo" label under the swipe buttons for the title
-  const yourWooLabel = page.locator("p.text-xs.font-medium.line-clamp-1").first();
+  // Fallback: read the "Your Woo" label under the swipe buttons
+  // The element uses responsive classes (text-[10px] sm:text-xs) so match by structure
+  const yourWooLabel = page.locator("p.font-medium.line-clamp-1").first();
   const labelText = await yourWooLabel.textContent().catch(() => null);
 
   return {
@@ -99,7 +105,7 @@ export async function readCurrentCard(page: Page): Promise<WooInfo | null> {
     ["New", "Like New", "Good", "Fair", "Poor"].includes(b)
   ) ?? "";
 
-  const desc = await card.locator("p.text-sm.text-muted-foreground").first().textContent().catch(() => null);
+  const desc = await card.locator("p.text-muted-foreground").first().textContent().catch(() => null);
 
   return {
     id: "",
