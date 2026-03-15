@@ -957,3 +957,32 @@ To add or change seed items, edit `seed-data.json` and run `pnpm seed` again. To
 - Error handling and loading states
 - Performance optimization
 - Documentation and OpenAPI spec
+
+---
+
+## 16. Coding Conventions
+
+### React: Dialog/Modal Initialization
+
+Never call `setState` directly in the render body to respond to prop changes. This triggers the React error "Cannot update a component while rendering a different component." Instead, use `useEffect` keyed on the relevant prop:
+
+```tsx
+// Bad -- setState during render
+const [lastOpen, setLastOpen] = useState(false);
+if (open && !lastOpen) {
+  setLastOpen(true);
+  setData(...);
+}
+
+// Good -- useEffect
+useEffect(() => {
+  if (!open) return;
+  setData(...);
+}, [open]);
+```
+
+This applies to all dialogs, modals, and drawers that need to reset state or fetch data when opened.
+
+### Radix UI: No Select Inside Dialog
+
+Radix `Select` must not be used inside a Radix `Dialog`. Both components use portals and modal focus/pointer-event trapping that conflict -- the Dialog's modal overlay blocks pointer events on the Select's portaled dropdown, making items unclickable. Use `DropdownMenu` instead, which does not have this conflict. See `swipe-deck.tsx` and `chat-view.tsx` for the established pattern.

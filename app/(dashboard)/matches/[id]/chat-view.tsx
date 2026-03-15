@@ -10,11 +10,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from "@/components/ui/select";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Send,
   ArrowLeftRight,
@@ -127,10 +127,9 @@ function TradeProposalDialog({
     myMatchedWoo.id,
   ]);
   const [loadingWoos, setLoadingWoos] = useState(false);
-  const [lastOpen, setLastOpen] = useState(false);
 
-  if (open && !lastOpen) {
-    setLastOpen(true);
+  useEffect(() => {
+    if (!open) return;
     setSelectedWooIds([myMatchedWoo.id]);
     setLoadingWoos(true);
     getMyActiveWoosForTrade().then((woos) => {
@@ -144,9 +143,7 @@ function TradeProposalDialog({
       );
       setLoadingWoos(false);
     });
-  } else if (!open && lastOpen) {
-    setLastOpen(false);
-  }
+  }, [open, myMatchedWoo.id]);
 
   const selectedWoos = myWoos.filter((w) => selectedWooIds.includes(w.id));
   const availableToAdd = myWoos.filter(
@@ -202,28 +199,28 @@ function TradeProposalDialog({
                 ))}
 
                 {availableToAdd.length > 0 && (
-                  <Select
-                    value=""
-                    onValueChange={(id) =>
-                      setSelectedWooIds((prev) => [...prev, id])
-                    }
-                  >
-                    <SelectTrigger className="w-full h-9 border-dashed">
-                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="w-full h-9 border-dashed gap-1.5 text-muted-foreground">
                         <Plus className="h-3.5 w-3.5" />
                         <span className="text-sm">Add another Woo</span>
-                      </div>
-                    </SelectTrigger>
-                    <SelectContent>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="min-w-[var(--radix-dropdown-menu-trigger-width)]">
                       {availableToAdd.map((w) => (
-                        <SelectItem key={w.id} value={w.id}>
+                        <DropdownMenuItem
+                          key={w.id}
+                          onClick={() =>
+                            setSelectedWooIds((prev) => [...prev, w.id])
+                          }
+                        >
                           {w.title}
                           {w.estimated_value != null &&
                             ` ($${Number(w.estimated_value).toFixed(2)})`}
-                        </SelectItem>
+                        </DropdownMenuItem>
                       ))}
-                    </SelectContent>
-                  </Select>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
 
                 {selectedWoos.length > 1 && (
