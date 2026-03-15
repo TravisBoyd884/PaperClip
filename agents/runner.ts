@@ -205,7 +205,7 @@ async function doSwipePhase(agent: AgentState, appUrl: string): Promise<void> {
   }
 
   await browser.selectWoo(page);
-  await wait(500);
+  await browser.waitForFeedLoad(page);
 
   if (!agent.myWoo) {
     agent.myWoo = await browser.readSelectedWooInfo(page);
@@ -348,8 +348,10 @@ async function doMatchesPhase(agent: AgentState, appUrl: string): Promise<void> 
   log(agent, `Found ${matches.length} match(es)`);
 
   const match = matches[0];
+  if (agent.currentMatchId !== match.id) {
+    agent.chatMessageCount = 0;
+  }
   agent.currentMatchId = match.id;
-  agent.chatMessageCount = 0;
   agent.phase = "chat";
 
   await browser.openMatch(page, appUrl, match.id);
@@ -368,13 +370,17 @@ async function doChatPhase(agent: AgentState, appUrl: string): Promise<void> {
     await browser.openMatch(page, appUrl, agent.currentMatchId);
   }
 
+  await wait(500);
   const wooInfo = await browser.readWooInfoFromChat(page);
   const chatState = await browser.readChatState(page);
+
+  log(agent, `Chat state: trade=${chatState.tradeState}, messages=${chatState.messages.length}, mySent=${agent.chatMessageCount}`);
 
   if (chatState.tradeState === "completed") {
     log(agent, "Trade completed! Moving on.");
     agent.tradesDone++;
     agent.currentMatchId = null;
+    agent.chatMessageCount = 0;
     agent.phase = "swipe";
     return;
   }
@@ -383,7 +389,6 @@ async function doChatPhase(agent: AgentState, appUrl: string): Promise<void> {
     const myWoo = agent.myWoo ?? wooInfo.myWoo;
     const theirWoo = wooInfo.theirWoo;
 
-    // Try embedding-based auto-approve first
     if (prefEmbedding) {
       const theirEmbedding = await fetchCardEmbedding(theirWoo);
       if (theirEmbedding) {
@@ -391,35 +396,25 @@ async function doChatPhase(agent: AgentState, appUrl: string): Promise<void> {
         if (similarity >= SIMILARITY_RIGHT_THRESHOLD) {
           log(agent, `Auto-approving trade (embedding similarity=${similarity.toFixed(3)})`);
           await browser.clickApproveTrade(page);
-          await wait(INTER_ACTION_DELAY);
           agent.currentMatchId = null;
+          agent.chatMessageCount = 0;
           agent.phase = "matches";
           return;
         }
       }
     }
 
-    // Keyword-based auto-approve fallback
     const receivedText = `${theirWoo.title} ${theirWoo.description ?? ""} ${theirWoo.category}`;
     const givingText = `${myWoo.title} ${myWoo.description ?? ""} ${myWoo.category}`;
 
     const receivingWanted = keywordMatch(receivedText, config.preferences.wants);
     const givingTradeable = keywordMatch(givingText, config.preferences.willing_to_trade);
 
-    if (receivingWanted && givingTradeable) {
-      log(agent, "Auto-approving trade (keyword match: receiving wanted + giving tradeable)");
+    if (receivingWanted || givingTradeable) {
+      log(agent, `Auto-approving trade (keyword match: ${receivingWanted ? "receiving wanted" : ""}${receivingWanted && givingTradeable ? " + " : ""}${givingTradeable ? "giving tradeable" : ""})`);
       await browser.clickApproveTrade(page);
-      await wait(INTER_ACTION_DELAY);
       agent.currentMatchId = null;
-      agent.phase = "matches";
-      return;
-    }
-
-    if (receivingWanted) {
-      log(agent, "Auto-approving trade (keyword match: receiving wanted items)");
-      await browser.clickApproveTrade(page);
-      await wait(INTER_ACTION_DELAY);
-      agent.currentMatchId = null;
+      agent.chatMessageCount = 0;
       agent.phase = "matches";
       return;
     }
@@ -435,20 +430,27 @@ async function doChatPhase(agent: AgentState, appUrl: string): Promise<void> {
       });
 
       if (shouldApprove) {
-        log(agent, "Approving trade!");
+        log(agent, "LLM approved trade!");
         await browser.clickApproveTrade(page);
-        await wait(INTER_ACTION_DELAY);
+        agent.currentMatchId = null;
+        agent.chatMessageCount = 0;
+        agent.phase = "matches";
       } else {
-        log(agent, "Declining trade — sending message instead");
+        log(agent, "LLM declined trade — sending message");
         await browser.typeMessage(page, "Hmm, I'm not sure about this trade. Let me think about it.");
       }
     } catch (err) {
       log(agent, `LLM error during trade decision: ${err}. Auto-approving.`);
       await browser.clickApproveTrade(page);
+      agent.currentMatchId = null;
+      agent.chatMessageCount = 0;
+      agent.phase = "matches";
     }
+    return;
+  }
 
-    agent.currentMatchId = null;
-    agent.phase = "matches";
+  if (chatState.tradeState === "pending_their_approval") {
+    log(agent, "Waiting for counterparty to approve trade...");
     return;
   }
 
@@ -468,21 +470,20 @@ async function doChatPhase(agent: AgentState, appUrl: string): Promise<void> {
     const wantsToPropose = rawMessage.includes("[PROPOSE]");
     const message = rawMessage.replace(/\[PROPOSE\]/g, "").trim();
 
-    log(agent, `Sending: "${message.slice(0, 60)}${message.length > 60 ? "..." : ""}"`);
+    log(agent, `Sending: "${message.slice(0, 80)}${message.length > 80 ? "..." : ""}"`);
     await browser.typeMessage(page, message);
     await wait(INTER_ACTION_DELAY);
 
     agent.chatMessageCount++;
 
     const shouldAutoPropose = agent.chatMessageCount >= MAX_CHAT_MESSAGES_BEFORE_AUTO_PROPOSE;
-    if (chatState.tradeState === "none" && (wantsToPropose || shouldAutoPropose)) {
+    if (wantsToPropose || shouldAutoPropose) {
       if (wantsToPropose) {
         log(agent, "LLM signaled trade readiness — proposing trade...");
       } else {
         log(agent, `Auto-proposing after ${agent.chatMessageCount} messages...`);
       }
       await browser.clickProposeTrade(page);
-      await wait(INTER_ACTION_DELAY);
     }
   } catch (err) {
     log(agent, `LLM error generating message: ${err}`);
@@ -490,15 +491,11 @@ async function doChatPhase(agent: AgentState, appUrl: string): Promise<void> {
     await wait(INTER_ACTION_DELAY);
 
     agent.chatMessageCount++;
-    if (chatState.tradeState === "none" && agent.chatMessageCount >= MAX_CHAT_MESSAGES_BEFORE_AUTO_PROPOSE) {
+    if (agent.chatMessageCount >= MAX_CHAT_MESSAGES_BEFORE_AUTO_PROPOSE) {
       log(agent, "Auto-proposing after error fallback...");
       await browser.clickProposeTrade(page);
-      await wait(INTER_ACTION_DELAY);
     }
   }
-
-  agent.currentMatchId = null;
-  agent.phase = "matches";
 }
 
 async function runRound(agents: AgentState[], appUrl: string, round: number) {
@@ -514,7 +511,7 @@ async function runRound(agents: AgentState[], appUrl: string, round: number) {
         agent.phase = "swipe";
       }
 
-      log(agent, `Starting phase: ${agent.phase}`);
+      log(agent, `Phase: ${agent.phase}${agent.currentMatchId ? ` (match: ${agent.currentMatchId.slice(0, 8)}…)` : ""}`);
       switch (agent.phase) {
         case "swipe":
           await doSwipePhase(agent, appUrl);
@@ -532,6 +529,8 @@ async function runRound(agents: AgentState[], appUrl: string, round: number) {
   for (let i = 0; i < results.length; i++) {
     if (results[i].status === "rejected") {
       log(agents[i], `Error in ${agents[i].phase} phase: ${(results[i] as PromiseRejectedResult).reason}`);
+      agents[i].currentMatchId = null;
+      agents[i].chatMessageCount = 0;
       agents[i].phase = "swipe";
     }
   }

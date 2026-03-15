@@ -9,7 +9,8 @@
     "lint": "eslint",
     "seed": "tsx scripts/seed.ts",
     "seed:demo": "tsx scripts/seed.ts --create-users",
-    "agents": "tsx agents/runner.ts"
+    "agents": "tsx agents/runner.ts",
+    "test:agents": "tsx agents/test-trade.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",

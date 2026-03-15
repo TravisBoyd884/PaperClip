@@ -88,7 +88,7 @@ export async function readSelectedWooInfo(page: Page): Promise<WooInfo | null> {
 }
 
 export async function readCurrentCard(page: Page): Promise<WooInfo | null> {
-  const card = page.locator(".absolute.inset-0.rounded-2xl.overflow-hidden.bg-card.border.shadow-lg").first();
+  const card = page.locator(".absolute.inset-0.rounded-3xl.overflow-hidden.bg-card.shadow-md").first();
   if (!(await card.count())) return null;
 
   const title = await card.locator("h3").first().textContent().catch(() => null);
@@ -118,38 +118,57 @@ export async function readCurrentCard(page: Page): Promise<WooInfo | null> {
   };
 }
 
+async function dismissAnyDialog(page: Page) {
+  const overlay = page.locator('[data-slot="dialog-overlay"]').first();
+  if (await overlay.isVisible().catch(() => false)) {
+    await page.keyboard.press("Escape");
+    await wait(500);
+  }
+}
+
 export async function clickSwipe(page: Page, direction: "left" | "right") {
-  if (direction === "left") {
-    const btn = page.locator("button.rounded-full.border-destructive").first();
-    if (await btn.count()) {
-      await btn.click();
-      await wait(SLOW_MO);
+  await dismissAnyDialog(page);
+
+  const selector = direction === "left"
+    ? "button.rounded-full.text-destructive"
+    : "button.rounded-full.text-accent";
+
+  const btn = page.locator(selector).first();
+  if (await btn.count()) {
+    try {
+      await btn.click({ timeout: 3000 });
+    } catch {
+      await dismissAnyDialog(page);
+      try {
+        await btn.click({ timeout: 3000 });
+      } catch {
+        return;
+      }
     }
-  } else {
-    const btn = page.locator("button.rounded-full.border-pink-500").first();
-    if (await btn.count()) {
-      await btn.click();
-      await wait(SLOW_MO);
-    }
+    await wait(SLOW_MO);
   }
   await wait(500);
 }
 
 export async function checkMatchModal(page: Page): Promise<boolean> {
+  await wait(500);
   const modal = page.locator("text=It's a Match").first();
   const visible = await modal.isVisible().catch(() => false);
 
   if (visible) {
-    await wait(1500);
-    const closeBtn = page.locator('[role="dialog"] button').last();
-    if (await closeBtn.count()) {
-      await closeBtn.click();
-    } else {
-      await page.keyboard.press("Escape");
-    }
+    await wait(1000);
+    await page.keyboard.press("Escape");
     await wait(500);
     return true;
   }
+
+  const overlay = page.locator('[data-slot="dialog-overlay"]').first();
+  if (await overlay.isVisible().catch(() => false)) {
+    await page.keyboard.press("Escape");
+    await wait(500);
+    return true;
+  }
+
   return false;
 }
 
@@ -184,8 +203,7 @@ export async function readWooInfoFromChat(page: Page): Promise<{
   theirWoo: WooInfo;
   theirUsername: string;
 }> {
-  // The header contains: "{theirWoo.title} ⇄ {myWoo.title}"
-  const wooLine = page.locator("p.text-xs.text-muted-foreground.truncate").first();
+  const wooLine = page.locator("p.text-muted-foreground.truncate").first();
   const wooText = await wooLine.textContent().catch(() => null);
 
   let myTitle = "My Item";
@@ -197,8 +215,7 @@ export async function readWooInfoFromChat(page: Page): Promise<{
     myTitle = parts[1] || myTitle;
   }
 
-  // Read their username from the header
-  const usernameEl = page.locator("span.text-sm.font-medium.truncate").first();
+  const usernameEl = page.locator("span.font-medium.truncate").first();
   const theirUsername = await usernameEl.textContent().catch(() => "Counterparty");
 
   return {
@@ -231,16 +248,8 @@ export async function readChatState(page: Page): Promise<{
 }> {
   const messages: { sender: string; content: string; isMe: boolean }[] = [];
 
-  // Read chat messages from the message area
-  // My messages: div.flex.justify-end > div with bg-primary
-  // Their messages: div.flex.justify-start > div with bg-muted
   const msgContainer = page.locator(".flex-1.overflow-y-auto");
   if (await msgContainer.count()) {
-    // Find all top-level flex containers that represent messages
-    const myMsgBubbles = msgContainer.locator("> div.flex.justify-end > div.rounded-2xl");
-    const theirMsgBubbles = msgContainer.locator("> div.flex.justify-start > div.rounded-2xl");
-
-    // Read all message elements in document order by querying all flex > rounded-2xl
     const allBubbles = msgContainer.locator(":scope > div.flex > div.rounded-2xl");
     const bubbleCount = await allBubbles.count();
 
@@ -251,12 +260,10 @@ export async function readChatState(page: Page): Promise<{
       const parentClasses = await parent.getAttribute("class").catch(() => "");
       const isMe = parentClasses?.includes("justify-end") ?? false;
 
-      // Get the message text (the <p> with text-sm whitespace-pre-wrap)
-      const textEl = bubble.locator("p.text-sm").first();
+      const textEl = bubble.locator("p.whitespace-pre-wrap").first();
       const content = await textEl.textContent().catch(() => null);
       if (!content) continue;
 
-      // Get sender name for their messages
       let sender = "Me";
       if (!isMe) {
         const senderEl = bubble.locator("span.font-medium").first();
@@ -267,19 +274,20 @@ export async function readChatState(page: Page): Promise<{
     }
   }
 
-  // Check trade state
-  const approveBtn = page.locator('button:has-text("Approve Trade")').first();
-  const proposeBtn = page.locator('button:has-text("Propose Trade")').first();
-  const completedText = page.locator('text=/Trade completed|Woos have been swapped/').first();
+  const tradeProposalCard = page.locator('[data-slot="card"]:has-text("Trade Proposal")').first();
+  const completedCard = page.locator('[data-slot="card"]:has-text("Trade Completed")').first();
+  const completedFooter = page.locator('text=/Trade completed.*Woos have been swapped/').first();
+  const approveBtn = tradeProposalCard.locator('button:has-text("Approve")').first();
+  const waitingText = tradeProposalCard.locator('text=/Waiting for the other party/').first();
 
   let tradeState: "none" | "pending_my_approval" | "pending_their_approval" | "completed" = "none";
-  const hasTradeCard = (await approveBtn.count()) > 0 || (await proposeBtn.count()) > 0;
+  const hasTradeCard = await tradeProposalCard.count() > 0;
 
-  if (await completedText.isVisible().catch(() => false)) {
+  if ((await completedCard.isVisible().catch(() => false)) || (await completedFooter.isVisible().catch(() => false))) {
     tradeState = "completed";
   } else if (await approveBtn.isVisible().catch(() => false)) {
     tradeState = "pending_my_approval";
-  } else if (hasTradeCard) {
+  } else if (await waitingText.isVisible().catch(() => false)) {
     tradeState = "pending_their_approval";
   }
 
@@ -303,34 +311,70 @@ export async function typeMessage(page: Page, text: string) {
 }
 
 export async function clickProposeTrade(page: Page) {
+  await dismissAnyDialog(page);
+
   const btn = page.locator('button:has-text("Propose Trade")').first();
   if (await btn.isVisible().catch(() => false)) {
     await btn.click();
-    await wait(1000);
 
-    // The proposal dialog opens — click the "Propose Trade" button inside it
     const dialogBtn = page.locator('[role="dialog"] button:has-text("Propose Trade")').first();
-    if (await dialogBtn.isVisible().catch(() => false)) {
+    try {
+      await dialogBtn.waitFor({ state: "visible", timeout: 5000 });
+      await wait(300);
       await dialogBtn.click();
-      await wait(1000);
+      await wait(2000);
+    } catch {
+      // Dialog may not have appeared — press Escape to dismiss any partial state
+      await page.keyboard.press("Escape");
+      await wait(500);
     }
   }
 }
 
 export async function clickApproveTrade(page: Page) {
-  const btn = page.locator('button:has-text("Approve Trade")').first();
+  await dismissAnyDialog(page);
+
+  const card = page.locator('[data-slot="card"]:has-text("Trade Proposal")').first();
+  const btn = card.locator('button:has-text("Approve")').first();
   if (await btn.isVisible().catch(() => false)) {
-    await btn.click();
-    await wait(1000);
+    try {
+      await btn.click({ timeout: 5000 });
+      await wait(2000);
+    } catch {
+      await dismissAnyDialog(page);
+      try {
+        await btn.click({ timeout: 5000 });
+        await wait(2000);
+      } catch {
+        return;
+      }
+    }
+  }
+}
+
+export async function waitForFeedLoad(page: Page) {
+  const spinner = page.locator(".animate-spin").first();
+  for (let i = 0; i < 15; i++) {
+    if (await spinner.isVisible().catch(() => false)) {
+      await wait(500);
+      continue;
+    }
+    const card = page.locator(".absolute.inset-0.rounded-3xl.overflow-hidden.bg-card").first();
+    if ((await card.count()) > 0) return;
+    const noMore = page.locator("text=No more Woos to swipe on").first();
+    if (await noMore.isVisible().catch(() => false)) return;
+    await wait(500);
   }
 }
 
 export async function hasSwipeCards(page: Page): Promise<boolean> {
+  const card = page.locator(".absolute.inset-0.rounded-3xl.overflow-hidden.bg-card").first();
+  if ((await card.count()) > 0) return true;
+
   const noMore = page.locator("text=No more Woos to swipe on").first();
   if (await noMore.isVisible().catch(() => false)) return false;
 
-  const card = page.locator(".absolute.inset-0.rounded-2xl.overflow-hidden.bg-card.border.shadow-lg").first();
-  return (await card.count()) > 0;
+  return false;
 }
 
 export async function isOnPage(page: Page, urlPart: string): Promise<boolean> {
