@@ -37,7 +37,7 @@ export default async function CashoutPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Cash Out</h1>
+          <h1 className="text-3xl font-serif font-bold tracking-tight">Cash Out</h1>
           <p className="text-muted-foreground mt-1">
             Convert a Woo back to its physical item. We&apos;ll ship it to you.
           </p>

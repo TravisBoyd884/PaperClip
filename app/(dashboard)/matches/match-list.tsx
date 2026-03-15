@@ -109,7 +109,7 @@ export function MatchList({
           return (
             <div
               key={match.id}
-              className="group flex items-center gap-2 sm:gap-4 rounded-lg border border-destructive/30 p-2 sm:p-4 opacity-60"
+              className="group flex items-center gap-2 sm:gap-4 rounded-xl border border-destructive/30 p-2 sm:p-4 opacity-60"
             >
               <div className="flex items-center gap-2 grayscale">
                 <MiniHex
@@ -157,7 +157,7 @@ export function MatchList({
           <Link
             key={match.id}
             href={`/matches/${match.id}`}
-            className="group flex items-center gap-2 sm:gap-4 rounded-lg border p-2 sm:p-4 transition-colors hover:bg-accent/50"
+            className="group flex items-center gap-2 sm:gap-4 rounded-xl border p-2 sm:p-4 transition-colors hover:bg-muted/50"
           >
             <div className="flex items-center gap-2">
               <MiniHex

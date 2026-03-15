@@ -207,7 +207,7 @@ export function IntakeForm() {
               {photos.map((photo, i) => (
                 <div
                   key={i}
-                  className="group relative h-20 w-20 overflow-hidden rounded-md border"
+                  className="group relative h-20 w-20 overflow-hidden rounded-xl border"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -229,7 +229,7 @@ export function IntakeForm() {
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
-                className="flex h-20 w-20 items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/25 hover:border-muted-foreground/50 transition-colors"
+                className="flex h-20 w-20 items-center justify-center rounded-xl border-2 border-dashed border-muted-foreground/25 hover:border-muted-foreground/50 transition-colors"
               >
                 {uploading ? (
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />

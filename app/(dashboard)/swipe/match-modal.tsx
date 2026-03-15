@@ -36,8 +36,8 @@ export function MatchModal({
 
         <div className="space-y-4 sm:space-y-6 py-2 sm:py-4">
           <div className="space-y-1.5 sm:space-y-2">
-            <Heart className="h-7 w-7 sm:h-10 sm:w-10 text-pink-500 mx-auto fill-pink-500 animate-pulse" />
-            <h2 className="text-xl sm:text-2xl font-bold">It&apos;s a Match!</h2>
+            <Heart className="h-7 w-7 sm:h-10 sm:w-10 text-accent mx-auto fill-accent animate-pulse" />
+            <h2 className="text-xl sm:text-3xl font-serif font-bold tracking-tight">It&apos;s a Match!</h2>
             <p className="text-xs sm:text-sm text-muted-foreground">
               You both want to trade. Start chatting!
             </p>
@@ -62,6 +62,7 @@ export function MatchModal({
               Keep Swiping
             </Button>
             <Button
+              variant="accent"
               onClick={() => {
                 onClose();
                 router.push(`/matches/${data.match_id}`);

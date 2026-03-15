@@ -32,12 +32,12 @@ type ValueTier = {
 
 function getValueTier(value: number | null): ValueTier {
   if (value == null) return { bg: "bg-border" };
-  if (value < 5) return { bg: "bg-sky-300" };
-  if (value < 10) return { bg: "bg-blue-500" };
-  if (value < 20) return { bg: "bg-purple-500" };
-  if (value < 80) return { bg: "bg-pink-500" };
-  if (value < 200) return { bg: "bg-red-500" };
-  if (value < 500) return { bg: "bg-amber-400" };
+  if (value < 5) return { bg: "bg-orange-200" };
+  if (value < 10) return { bg: "bg-orange-300" };
+  if (value < 20) return { bg: "bg-orange-400" };
+  if (value < 80) return { bg: "bg-rose-400" };
+  if (value < 200) return { bg: "bg-rose-500" };
+  if (value < 500) return { bg: "bg-amber-500" };
   return { bg: "", isRainbow: true };
 }
 

@@ -31,7 +31,7 @@ export default async function IntakePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Intake</h1>
+          <h1 className="text-3xl font-serif font-bold tracking-tight">Intake</h1>
           <p className="text-muted-foreground mt-1">
             Send in physical items to receive tradeable Woos.
           </p>

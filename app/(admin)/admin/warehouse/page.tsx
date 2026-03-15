@@ -35,7 +35,7 @@ export default async function WarehouseOverviewPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Warehouse Overview</h1>
+        <h1 className="text-3xl font-serif font-bold tracking-tight">Warehouse Overview</h1>
         <p className="text-muted-foreground mt-1">
           Manage intakes, inventory, and cash outs.
         </p>

@@ -145,7 +145,7 @@ function IntakeCard({ item }: { item: IntakeItem }) {
                 <img
                   src={item.photos[0]}
                   alt={item.name}
-                  className="h-10 w-10 rounded object-cover"
+                  className="h-10 w-10 rounded-lg object-cover"
                 />
               )}
               {item.name}
@@ -190,14 +190,14 @@ function IntakeCard({ item }: { item: IntakeItem }) {
                   key={i}
                   src={photo}
                   alt={`${item.name} photo ${i + 1}`}
-                  className="h-24 w-24 flex-shrink-0 rounded-md object-cover"
+                  className="h-24 w-24 flex-shrink-0 rounded-xl object-cover"
                 />
               ))}
             </div>
           )}
 
           {item.warehouses && (
-            <div className="rounded-md border p-3 space-y-2">
+            <div className="rounded-xl border p-3 space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <MapPin className="h-4 w-4" />
                 Ship to: {item.warehouses.name}

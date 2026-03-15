@@ -24,7 +24,7 @@ export default async function AdminCashoutsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Cash Outs</h1>
+        <h1 className="text-3xl font-serif font-bold tracking-tight">Cash Outs</h1>
         <p className="text-muted-foreground mt-1">
           Process cash out requests: pull items, ship, and track delivery.
         </p>

@@ -77,7 +77,7 @@ export default async function WooDetailPage({
           </Link>
         </Button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold">{woo.title}</h1>
+          <h1 className="text-2xl font-serif font-bold tracking-tight">{woo.title}</h1>
           <div className="mt-1 flex items-center gap-2">
             <Badge
               variant={isActive ? "default" : "secondary"}
@@ -126,7 +126,7 @@ export default async function WooDetailPage({
                       key={i}
                       src={url}
                       alt={`${woo.title} ${i + 1}`}
-                      className="h-20 w-20 flex-shrink-0 rounded-md object-cover border"
+                      className="h-20 w-20 flex-shrink-0 rounded-xl object-cover border"
                     />
                   ))}
                 </div>

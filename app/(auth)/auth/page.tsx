@@ -87,7 +87,7 @@ export default function AuthPage() {
   return (
     <Card className="w-full max-w-md">
       <CardHeader className="text-center">
-        <CardTitle className="text-2xl font-bold">PaperClip</CardTitle>
+        <CardTitle className="text-3xl font-serif font-bold tracking-tight">PaperClip</CardTitle>
         <CardDescription>
           Trade your way up. Start with a paperclip, end with your dream item.
         </CardDescription>

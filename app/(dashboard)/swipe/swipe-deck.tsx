@@ -386,7 +386,7 @@ export function SwipeDeck({ woos }: { woos: UserWoo[] }) {
 
       {/* Filter panel */}
       {showFilters && (
-        <div className="rounded-lg border bg-card p-4 space-y-4">
+        <div className="rounded-2xl border bg-card p-5 space-y-4">
           {/* Search */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">
@@ -529,7 +529,7 @@ export function SwipeDeck({ woos }: { woos: UserWoo[] }) {
             {/* Card stack */}
             <div className="relative h-[260px] sm:h-[380px] md:h-[460px] w-full max-w-sm">
               {nextWoo && (
-                <div className="absolute inset-0 rounded-2xl overflow-hidden bg-card border shadow-sm scale-[0.96] opacity-60">
+                <div className="absolute inset-0 rounded-3xl overflow-hidden bg-card border border-border/60 shadow-sm scale-[0.96] opacity-60">
                   <div className="relative h-[55%] sm:h-[60%] w-full overflow-hidden bg-muted">
                     {nextWoo.images?.[0] ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -559,7 +559,7 @@ export function SwipeDeck({ woos }: { woos: UserWoo[] }) {
               <Button
                 variant="outline"
                 size="icon"
-                className="h-10 w-10 sm:h-14 sm:w-14 rounded-full border-2 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                className="h-12 w-12 sm:h-16 sm:w-16 rounded-full border-2 border-destructive/70 text-destructive hover:bg-destructive hover:text-white shadow-sm transition-all duration-200 hover:scale-105 hover:shadow-md"
                 onClick={() => handleSwipe("left")}
                 disabled={swiping}
               >
@@ -587,7 +587,7 @@ export function SwipeDeck({ woos }: { woos: UserWoo[] }) {
               <Button
                 variant="outline"
                 size="icon"
-                className="h-10 w-10 sm:h-14 sm:w-14 rounded-full border-2 border-pink-500 text-pink-500 hover:bg-pink-500 hover:text-white"
+                className="h-12 w-12 sm:h-16 sm:w-16 rounded-full border-2 border-accent text-accent hover:bg-accent hover:text-white shadow-sm transition-all duration-200 hover:scale-105 hover:shadow-md"
                 onClick={() => handleSwipe("right")}
                 disabled={swiping}
               >

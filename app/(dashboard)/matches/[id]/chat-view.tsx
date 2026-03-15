@@ -558,9 +558,9 @@ export function ChatView({
             placeholder="Type a message..."
             disabled={sending}
             autoFocus
-            className="h-8 sm:h-9 text-xs sm:text-sm"
+            className="h-9 sm:h-10 text-xs sm:text-sm rounded-full px-4"
           />
-          <Button type="submit" size="icon" disabled={sending || !input.trim()} className="h-8 w-8 sm:h-9 sm:w-9 shrink-0">
+          <Button type="submit" size="icon" disabled={sending || !input.trim()} className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 rounded-full">
             {sending ? (
               <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
             ) : (

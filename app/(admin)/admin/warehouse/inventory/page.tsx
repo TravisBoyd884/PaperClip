@@ -24,7 +24,7 @@ export default async function AdminInventoryPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Inventory</h1>
+        <h1 className="text-3xl font-serif font-bold tracking-tight">Inventory</h1>
         <p className="text-muted-foreground mt-1">
           All verified and stored items with their linked Woo details.
         </p>

@@ -46,7 +46,7 @@ export function SwipeCard({
 
   return (
     <div
-      className="absolute inset-0 rounded-2xl overflow-hidden bg-card border shadow-lg transition-all duration-300 ease-out"
+      className="absolute inset-0 rounded-3xl overflow-hidden bg-card border border-border/60 shadow-md transition-all duration-300 ease-out"
       style={{
         transform: `translateX(${translateX}) rotate(${rotate})`,
         opacity: animating ? 0 : 1,
@@ -76,7 +76,7 @@ export function SwipeCard({
         )}
       </div>
 
-      <div className="p-2.5 sm:p-5 space-y-1.5 sm:space-y-3">
+      <div className="p-3 sm:p-6 space-y-1.5 sm:space-y-3">
         <div>
           <h3 className="text-sm sm:text-xl font-semibold leading-tight">{woo.title}</h3>
           <p className="text-[10px] sm:text-sm text-muted-foreground mt-0.5">
