@@ -2,6 +2,7 @@ import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "fs";
 import { resolve } from "path";
+import { createHash, randomBytes } from "crypto";
 
 const WAREHOUSE_ID = "a1b2c3d4-0001-4000-8000-000000000001";
 
@@ -13,8 +14,17 @@ interface SeedItem {
   estimated_value: number;
 }
 
+interface DemoUser {
+  email: string;
+  password: string;
+  username: string;
+  agent_framework: string;
+  agent_description: string;
+}
+
 interface SeedData {
   item_groups: { label: string; items: SeedItem[] }[];
+  demo_users?: DemoUser[];
 }
 
 function itemUuid(userUuid: string, index: number): string {
@@ -32,6 +42,109 @@ function wooUuid(userUuid: string, index: number): string {
 function placeholderUrl(name: string): string {
   const encoded = encodeURIComponent(name).replace(/%20/g, "+");
   return `https://placehold.co/600x400/EEE/31343C?font=montserrat&text=${encoded}`;
+}
+
+function hashAgentKey(plainKey: string): string {
+  const salt = process.env.AGENT_KEY_SALT ?? "paperclip-dev-salt";
+  return createHash("sha256").update(salt + plainKey).digest("hex");
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnySupabase = ReturnType<typeof createClient<any>>;
+
+async function ensureDemoUsers(
+  supabase: AnySupabase,
+  demoUsers: DemoUser[]
+): Promise<{ id: string; username: string }[]> {
+  const profiles: { id: string; username: string }[] = [];
+
+  for (const user of demoUsers) {
+    // Check if user with this email already exists
+    const { data: existingUsers } = await supabase.auth.admin.listUsers();
+    const existing = existingUsers?.users?.find((u) => u.email === user.email);
+
+    let userId: string;
+
+    if (existing) {
+      userId = existing.id;
+      console.log(`  Found existing user: ${user.username} (${userId})`);
+    } else {
+      const { data: created, error } = await supabase.auth.admin.createUser({
+        email: user.email,
+        password: user.password,
+        email_confirm: true,
+      });
+
+      if (error || !created.user) {
+        console.error(`  Failed to create user ${user.email}: ${error?.message}`);
+        process.exit(1);
+      }
+
+      userId = created.user.id;
+      console.log(`  Created user: ${user.username} (${userId})`);
+    }
+
+    // Update profile with agent info
+    const { error: profileErr } = await supabase
+      .from("profiles")
+      .update({
+        username: user.username,
+        is_agent: true,
+        agent_framework: user.agent_framework,
+        agent_description: user.agent_description,
+      })
+      .eq("id", userId);
+
+    if (profileErr) {
+      console.warn(`  Warning updating profile for ${user.username}: ${profileErr.message}`);
+    }
+
+    profiles.push({ id: userId, username: user.username });
+  }
+
+  return profiles;
+}
+
+async function createAgentKeys(
+  supabase: AnySupabase,
+  profiles: { id: string; username: string }[]
+): Promise<void> {
+  console.log("\nCreating agent keys...");
+
+  // Delete existing agent keys for these users
+  const userIds = profiles.map((p) => p.id);
+  await supabase.from("agent_keys").delete().in("user_id", userIds);
+
+  const keys: { username: string; key: string }[] = [];
+
+  for (const profile of profiles) {
+    const random = randomBytes(24).toString("base64url");
+    const plainKey = `pc_live_${random}`;
+    const hash = hashAgentKey(plainKey);
+    const prefix = plainKey.slice(0, 12);
+
+    const { error } = await supabase.from("agent_keys").insert({
+      user_id: profile.id,
+      name: `${profile.username} Auto-Key`,
+      key_hash: hash,
+      key_prefix: prefix,
+      permissions: ["read", "swipe", "chat", "trade"],
+      rate_limit: 120,
+      daily_trade_limit: 200,
+    });
+
+    if (error) {
+      console.error(`  Failed to create key for ${profile.username}: ${error.message}`);
+    } else {
+      keys.push({ username: profile.username, key: plainKey });
+    }
+  }
+
+  console.log("\n=== Agent Keys (save these — shown only once) ===");
+  for (const k of keys) {
+    console.log(`  ${k.username}: ${k.key}`);
+  }
+  console.log("=================================================\n");
 }
 
 async function main() {
@@ -52,46 +165,59 @@ async function main() {
   const seedPath = resolve(__dirname, "..", "supabase", "seed-data.json");
   const seedData: SeedData = JSON.parse(readFileSync(seedPath, "utf-8"));
 
-  // Auto-discover existing profiles
-  const { data: profiles, error: profilesError } = await supabase
-    .from("profiles")
-    .select("id, username")
-    .order("created_at", { ascending: true });
+  const createDemoUsers = process.argv.includes("--create-users");
 
-  if (profilesError) {
-    console.error("Failed to fetch profiles:", profilesError.message);
-    process.exit(1);
-  }
+  let pairedUsers: { id: string; username: string }[];
 
-  if (!profiles || profiles.length === 0) {
-    console.error("No profiles found in the database. Create users first.");
-    process.exit(1);
+  if (createDemoUsers && seedData.demo_users?.length) {
+    console.log("Creating/updating demo users...");
+    pairedUsers = await ensureDemoUsers(supabase, seedData.demo_users);
+  } else {
+    // Auto-discover existing profiles
+    const { data: profiles, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id, username")
+      .order("created_at", { ascending: true });
+
+    if (profilesError) {
+      console.error("Failed to fetch profiles:", profilesError.message);
+      process.exit(1);
+    }
+
+    if (!profiles || profiles.length === 0) {
+      console.error(
+        "No profiles found. Run with --create-users to create demo accounts, or create users manually first."
+      );
+      process.exit(1);
+    }
+
+    pairedUsers = profiles;
   }
 
   const groupCount = seedData.item_groups.length;
-  if (profiles.length < groupCount) {
+  if (pairedUsers.length < groupCount) {
     console.warn(
-      `Found ${profiles.length} profile(s) but seed-data.json has ${groupCount} item group(s). ` +
-        `Only the first ${profiles.length} group(s) will be seeded.`
+      `Found ${pairedUsers.length} profile(s) but seed-data.json has ${groupCount} item group(s). ` +
+        `Only the first ${pairedUsers.length} group(s) will be seeded.`
     );
   }
 
-  const pairCount = Math.min(profiles.length, groupCount);
-  const pairedUsers = profiles.slice(0, pairCount);
+  const pairCount = Math.min(pairedUsers.length, groupCount);
+  const users = pairedUsers.slice(0, pairCount);
 
-  console.log(`Discovered ${profiles.length} profile(s), seeding ${pairCount}:`);
+  console.log(`\nDiscovered ${pairedUsers.length} profile(s), seeding ${pairCount}:`);
   for (let i = 0; i < pairCount; i++) {
     console.log(
-      `  ${seedData.item_groups[i].label} -> ${pairedUsers[i].username} (${pairedUsers[i].id})`
+      `  ${seedData.item_groups[i].label} -> ${users[i].username} (${users[i].id})`
     );
   }
 
   // Compute deterministic IDs for all paired users
-  const userIds = pairedUsers.map((p) => p.id);
+  const userIds = users.map((p) => p.id);
   const allItemIds: string[] = [];
   const allWooIds: string[] = [];
   for (let g = 0; g < pairCount; g++) {
-    const userId = pairedUsers[g].id;
+    const userId = users[g].id;
     const items = seedData.item_groups[g].items;
     for (let i = 0; i < items.length; i++) {
       allItemIds.push(itemUuid(userId, i));
@@ -143,8 +269,8 @@ async function main() {
   let totalItems = 0;
 
   for (let g = 0; g < pairCount; g++) {
-    const userId = pairedUsers[g].id;
-    const username = pairedUsers[g].username;
+    const userId = users[g].id;
+    const username = users[g].username;
     const items = seedData.item_groups[g].items;
 
     for (let i = 0; i < items.length; i++) {
@@ -206,10 +332,18 @@ async function main() {
     console.warn(`  Warning updating warehouse count: ${warehouseError.message}`);
   }
 
-  console.log("\n--- Seed Complete ---");
+  // Create agent keys if --create-users was used
+  if (createDemoUsers) {
+    await createAgentKeys(supabase, users);
+  }
+
+  console.log("--- Seed Complete ---");
   console.log(`Profiles seeded: ${pairCount}`);
   console.log(`Items seeded:    ${totalItems}`);
   console.log(`Woos minted:     ${totalItems}`);
+  if (createDemoUsers) {
+    console.log(`Agent keys:      ${pairCount}`);
+  }
 }
 
 main().catch((err) => {

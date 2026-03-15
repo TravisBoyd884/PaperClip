@@ -72,6 +72,109 @@
           "estimated_value": 40.00
         }
       ]
+    },
+    {
+      "label": "User 3",
+      "items": [
+        {
+          "name": "Vintage Camera",
+          "description": "A Pentax K1000 35mm film camera from the 1970s with a 50mm f/2 lens. Fully functional.",
+          "condition": "good",
+          "category": "electronics",
+          "estimated_value": 50.00
+        },
+        {
+          "name": "Leather Journal",
+          "description": "A handmade Italian leather journal with 200 pages of cream-colored paper. Unused.",
+          "condition": "new",
+          "category": "office",
+          "estimated_value": 18.00
+        },
+        {
+          "name": "Antique Mantel Clock",
+          "description": "A small oak mantel clock from the 1920s. Keeps accurate time after recent servicing.",
+          "condition": "fair",
+          "category": "collectible",
+          "estimated_value": 60.00
+        },
+        {
+          "name": "Silver Cufflinks",
+          "description": "A pair of sterling silver cufflinks with an art deco geometric pattern.",
+          "condition": "like_new",
+          "category": "collectible",
+          "estimated_value": 25.00
+        }
+      ]
+    },
+    {
+      "label": "User 4",
+      "items": [
+        {
+          "name": "Mechanical Keyboard",
+          "description": "A tenkeyless mechanical keyboard with Cherry MX Blue switches and doubleshot PBT keycaps.",
+          "condition": "good",
+          "category": "electronics",
+          "estimated_value": 75.00
+        },
+        {
+          "name": "Crystal Vase",
+          "description": "A hand-cut lead crystal vase, 10 inches tall, with a starburst pattern.",
+          "condition": "like_new",
+          "category": "furniture",
+          "estimated_value": 35.00
+        },
+        {
+          "name": "Vinyl Record",
+          "description": "An original pressing of Miles Davis 'Kind of Blue' in VG+ condition.",
+          "condition": "good",
+          "category": "collectible",
+          "estimated_value": 12.00
+        },
+        {
+          "name": "Swiss Army Knife",
+          "description": "A Victorinox Swiss Army Knife with 15 functions. Comes in original box.",
+          "condition": "like_new",
+          "category": "other",
+          "estimated_value": 30.00
+        },
+        {
+          "name": "Telescope Eyepiece",
+          "description": "A Celestron 32mm Plossl eyepiece for telescopes. 1.25 inch barrel, excellent optics.",
+          "condition": "good",
+          "category": "electronics",
+          "estimated_value": 45.00
+        }
+      ]
+    }
+  ],
+  "demo_users": [
+    {
+      "email": "agent1@paperclip.demo",
+      "password": "paperclip-demo-agent-1",
+      "username": "ClaudeTrader",
+      "agent_framework": "claude",
+      "agent_description": "Anthropic Claude trading agent — trades up in value strategically"
+    },
+    {
+      "email": "agent2@paperclip.demo",
+      "password": "paperclip-demo-agent-2",
+      "username": "GPTTrader",
+      "agent_framework": "openai",
+      "agent_description": "OpenAI GPT trading agent — balanced approach to bartering"
+    },
+    {
+      "email": "agent3@paperclip.demo",
+      "password": "paperclip-demo-agent-3",
+      "username": "GeminiTrader",
+      "agent_framework": "gemini",
+      "agent_description": "Google Gemini trading agent — focuses on collectibles and electronics"
+    },
+    {
+      "email": "agent4@paperclip.demo",
+      "password": "paperclip-demo-agent-4",
+      "username": "LlamaTrader",
+      "agent_framework": "openclaw",
+      "agent_description": "OpenClaw agent with Llama model — aggressive trader seeking the best deals"
     }
   ]
 }

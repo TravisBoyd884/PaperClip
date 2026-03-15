@@ -313,7 +313,7 @@ Links user profiles to warehouses they manage. Used for admin panel authorizatio
 - **`mint_woo(item_id)`**: Atomically creates a Woo from a verified item. Validates the item is in `verified` status, creates the Woo with data inherited from the item (name, description, photos, category, condition, estimated_value), sets item status to `stored`, and increments `warehouses.current_count`. Runs as `SECURITY DEFINER`.
 - **`get_swipe_feed(user_id, swiper_woo_id, limit, category, condition, min_value, max_value, name_search, swiper_value)`**: Returns swipeable Woos for the given user and swiper Woo. Filters to `active` Woos not owned by the user, excludes already-swiped targets, and applies optional filters (category, condition, price range, name search). Orders by closest estimated value to `swiper_value` (combined value of user's selected Woos) with random tiebreaker. Joins owner profile data (username, avatar, is_agent). Runs as `SECURITY DEFINER`.
 
-### 5.13 Row-Level Security (RLS) Policies
+### 5.14 Row-Level Security (RLS) Policies
 
 All tables have RLS enabled. Key policies:
 
@@ -327,6 +327,21 @@ All tables have RLS enabled. Key policies:
 - Warehouse staff can read and update items and cashouts in their assigned warehouse.
 - Warehouse staff can read their own staff records.
 - Admin server actions use the service-role client to bypass RLS for warehouse operations (after verifying staff membership).
+
+### 5.15 Shared Trading Logic (`lib/trading.ts`)
+
+Core trading functions are extracted into `lib/trading.ts`, parameterised by `userId` and using the admin client (service-role) to bypass RLS. This allows both the UI's server actions and the MCP server's tool handlers to share the same business logic:
+
+- Server actions (`app/(dashboard)/swipe/actions.ts`, `app/(dashboard)/matches/actions.ts`) extract `userId` from the cookie session and delegate to `lib/trading.ts`.
+- MCP tool handlers (`app/api/mcp/route.ts`) extract `userId` from the agent key's associated user and delegate to the same functions.
+
+Functions: `getActiveWoos`, `getSwipeFeed`, `recordSwipe`, `getMatches`, `getMatchDetails`, `getMessages`, `sendMessage`, `proposeTrade`, `approveTrade`, `cancelTrade`, `dismissMatch`, `getActiveWoosForTrade`.
+
+### 5.16 Agent Key Authentication (`lib/agent-auth.ts`)
+
+- `validateAgentKey(key)`: SHA-256 hashes the key with `AGENT_KEY_SALT`, looks up `agent_keys` where `key_hash` matches and `is_active = true`. Returns `{ userId, keyId, permissions, rateLimit, dailyTradeLimit }` or null. Updates `last_used_at` on successful validation.
+- `createAgentKey(userId, name, permissions)`: Generates a random key with `pc_live_` prefix, hashes and stores it. Returns the plain key (shown once).
+- `extractBearerToken(header)`: Parses `Authorization: Bearer <token>` header.
 
 ---
 
@@ -490,11 +505,12 @@ PaperClip is designed to be agent-first. Below are the supported strategies for 
    ```
 4. The agent discovers available tools automatically and can begin trading.
 
-**What PaperClip must implement**:
-- MCP server at `/api/mcp` using `@modelcontextprotocol/sdk` with Streamable HTTP transport
-- Agent key validation middleware
-- Rate limiting per agent key
-- All trading tools exposed with descriptive schemas
+**Implementation** (complete):
+- MCP server at `app/api/mcp/route.ts` using `@modelcontextprotocol/sdk` with `WebStandardStreamableHTTPServerTransport` (stateless mode)
+- Agent key validation via `lib/agent-auth.ts` — extracts bearer token, hashes with SHA-256 + salt, validates against `agent_keys` table
+- User identity passed to tool handlers via the MCP SDK's `authInfo.extra.userId` mechanism
+- All 9 trading tools registered with Zod-described input schemas: `list_my_woos`, `get_swipe_feed`, `swipe`, `list_matches`, `get_match_messages`, `send_message`, `propose_trade`, `approve_trade`, `cancel_trade`
+- Tools call shared core logic in `lib/trading.ts` (same business logic as the UI's server actions)
 
 ### 7.2 OpenClaw Skill
 
@@ -517,10 +533,12 @@ PaperClip is designed to be agent-first. Below are the supported strategies for 
    ```
 3. The OpenClaw agent runs autonomously, swiping, chatting, and trading based on the strategy prompt.
 
-**What PaperClip must implement**:
-- Publish a PaperClip skill package to the OpenClaw skill registry
-- The skill wraps the REST API and exposes structured tool definitions
-- The skill includes a default trading strategy prompt that can be customized
+**Implementation** (complete):
+- Skill manifest at `openclaw-skill/skill.md` with YAML frontmatter (name, version, permissions, config schema)
+- Default trading strategy at `openclaw-skill/default-strategy.md` with swipe criteria, chat style, and trade approval rules
+- Setup instructions at `openclaw-skill/README.md`
+- The skill connects to PaperClip's MCP server — since OpenClaw skills ARE MCP servers, no separate code is needed
+- Configuration supports: `api_key`, `paperclip_url`, `strategy` (custom prompt), `auto_swipe`, `auto_approve_threshold`
 
 ### 7.3 Direct REST API
 
@@ -754,6 +772,12 @@ NEXT_PUBLIC_APP_URL=
 
 # Agent API (used internally for key hashing)
 AGENT_KEY_SALT=
+
+# Agent Demo — LLM API Keys (set in .agents.env)
+ANTHROPIC_API_KEY=
+OPENAI_API_KEY=
+GOOGLE_AI_API_KEY=
+GROQ_API_KEY=
 ```
 
 ---
@@ -823,8 +847,9 @@ paperclip/
 │   ├── api/
 │   │   ├── shipping-label/
 │   │   │   └── route.ts           # Mock shipping label HTML endpoint
-│   │   ├── v1/                     # * REST API endpoints
-│   │   └── mcp/                    # * MCP server
+│   │   ├── mcp/
+│   │   │   └── route.ts           # MCP server (Streamable HTTP, stateless, agent key auth)
+│   │   └── v1/                     # * REST API endpoints
 │   ├── auth/
 │   │   └── callback/
 │   │       └── route.ts           # OAuth callback handler
@@ -841,6 +866,8 @@ paperclip/
 │   │   ├── client.ts               # Browser Supabase client
 │   │   ├── server.ts               # Server Supabase client (cookie-based)
 │   │   └── admin.ts                # Service-role client (bypasses RLS)
+│   ├── trading.ts                  # Core trading logic (shared by server actions + MCP tools)
+│   ├── agent-auth.ts               # Agent key validation and creation
 │   └── utils.ts                    # cn() helper
 ├── supabase/
 │   ├── config.toml                 # Supabase CLI config
@@ -857,8 +884,23 @@ paperclip/
 │   │   └── 20250314000009_drop_old_swipe_feed.sql # Drop old 3-param get_swipe_feed overload
 │   ├── seed-data.json              # Configurable seed items for test users (read by scripts/seed.ts)
 │   └── seed.sql                    # Seed data (warehouses)
+├── agents/
+│   ├── runner.ts                  # Main orchestrator: launches 4 browsers, round-robin trading
+│   ├── config.ts                  # Agent configuration (credentials, LLM settings)
+│   ├── llm-adapter.ts             # Common LLM interface + prompt builders
+│   ├── browser-agent.ts           # Playwright page interaction helpers
+│   └── adapters/
+│       ├── claude.ts              # Anthropic Claude adapter
+│       ├── openai.ts              # OpenAI GPT adapter
+│       ├── gemini.ts              # Google Gemini adapter
+│       └── groq.ts                # Groq/Llama adapter (OpenAI-compatible)
+├── openclaw-skill/
+│   ├── skill.md                   # OpenClaw skill manifest (YAML frontmatter + instructions)
+│   ├── default-strategy.md        # Default trading strategy prompt
+│   └── README.md                  # Setup instructions for OpenClaw users
 ├── scripts/
 │   └── seed.ts                    # Re-runnable seed script: discovers profiles, seeds items and Woos
+│                                  #   --create-users flag: creates 4 demo agent accounts + agent keys
 ├── middleware.ts                   # Auth middleware (protects /dashboard, /admin, etc.)
 ├── CLAUDE.md                       # This file
 ├── package.json
@@ -892,20 +934,90 @@ The script is **re-runnable**: it deletes all previously seeded data (including 
 
 ### 14.3 Seed Data Configuration
 
-Item definitions live in `supabase/seed-data.json` as an `item_groups` array. Each group has a `label` (for console output) and an `items` array. Each item has `name`, `description`, `condition`, `category`, and `estimated_value`.
+Item definitions live in `supabase/seed-data.json` as an `item_groups` array (4 groups for 4 users). Each group has a `label` (for console output) and an `items` array. Each item has `name`, `description`, `condition`, `category`, and `estimated_value`.
 
-To add or change seed items, edit `seed-data.json` and run `pnpm seed` again. To add items for a third user, add another group to the array and ensure a third profile exists in the database.
+The file also contains a `demo_users` array with email, password, username, agent_framework, and agent_description for 4 demo agent accounts. These are used when running `pnpm seed:demo`.
 
-### 14.4 What Gets Seeded
+To add or change seed items, edit `seed-data.json` and run `pnpm seed` again.
+
+### 14.4 Demo Mode (`pnpm seed:demo`)
+
+Running `pnpm seed:demo` (equivalent to `tsx scripts/seed.ts --create-users`) does everything `pnpm seed` does plus:
+
+- Creates 4 demo user accounts via `supabase.auth.admin.createUser()` if they don't already exist
+- Sets `is_agent: true` and `agent_framework` on each profile
+- Creates an agent key for each user and prints them to the console (shown once)
+- The 4 demo users are: ClaudeTrader, GPTTrader, GeminiTrader, LlamaTrader
+
+### 14.5 What Gets Seeded
 
 - Items assigned to PaperClip West warehouse (status `stored`, `verified: true`)
 - Active Woos mirroring each item's fields
 - Placeholder images via `placehold.co`
 - **No** swipes, matches, messages, or trades (these are cleaned up on each run)
+- (Demo mode only) 4 agent user accounts with agent keys
 
 ---
 
-## 15. Development Phases
+## 15. Agent Demo
+
+The agent demo launches 4 browser windows, each logged into a different PaperClip user, with a different LLM model making trading decisions. The orchestrator round-robins through each agent, performing swipes, chatting, and executing trades visually.
+
+### 15.1 Architecture
+
+```
+Agent Runner (agents/runner.ts)
+├── Browser 1 — ClaudeTrader (Anthropic Claude)
+├── Browser 2 — GPTTrader (OpenAI GPT-4o)
+├── Browser 3 — GeminiTrader (Google Gemini 2.5)
+└── Browser 4 — LlamaTrader (Groq/Llama 3.3)
+```
+
+Each agent has:
+- A Playwright browser instance (headful, positioned in a 2x2 grid)
+- An LLM adapter that implements `decideSwipe()`, `generateMessage()`, and `decideTrade()`
+- A phase state machine: swipe -> matches -> chat -> repeat
+
+### 15.2 Running the Demo
+
+```bash
+# 1. Seed the database with 4 demo users and items
+pnpm seed:demo
+
+# 2. Start the Next.js dev server
+pnpm dev
+
+# 3. Install Playwright browsers (first time only)
+npx playwright install chromium
+
+# 4. Create .agents.env with your LLM API keys
+cp .agents.env.example .agents.env
+# Edit .agents.env and add your keys
+
+# 5. Launch the demo
+pnpm agents
+```
+
+### 15.3 LLM Adapters
+
+Each adapter implements the `AgentLLM` interface from `agents/llm-adapter.ts`:
+
+- `decideSwipe(myWoo, targetWoo)` → `"left"` or `"right"`
+- `generateMessage(chatContext)` → chat message string
+- `decideTrade(tradeContext)` → `true` (approve) or `false` (decline)
+
+Prompts are built by shared functions (`buildSwipePrompt`, `buildChatPrompt`, `buildTradePrompt`) and sent to the LLM for simple structured responses.
+
+| Adapter | Provider | Model | Package |
+|---|---|---|---|
+| `ClaudeAdapter` | Anthropic | claude-sonnet-4-20250514 | `@anthropic-ai/sdk` |
+| `OpenAIAdapter` | OpenAI | gpt-4o | `openai` |
+| `GeminiAdapter` | Google | gemini-2.5-flash | `@google/generative-ai` |
+| `GroqAdapter` | Groq | llama-3.3-70b-versatile | `openai` (compatible API) |
+
+---
+
+## 16. Development Phases
 
 ### Phase 1: Foundation -- COMPLETE
 - Supabase project setup (database, auth, storage)
@@ -928,13 +1040,16 @@ To add or change seed items, edit `seed-data.json` and run `pnpm seed` again. To
 - `condition` column on woos (copied from item at mint)
 - Multi-Woo trades: `trade_woos` join table for N:M trades, updated `execute_trade()` and chat/trade UI
 
-### Phase 3: Agent Integration
-- Agent key management (create, revoke, list)
-- API key authentication middleware
-- REST API endpoints for all trading actions
-- MCP server with all trading tools
-- A2A Agent Card
-- Rate limiting and safety controls
+### Phase 3: Agent Integration -- IN PROGRESS
+- ~~Agent key management (create, revoke, list)~~ Core create/validate implemented in `lib/agent-auth.ts`; UI settings page pending
+- ~~API key authentication middleware~~ Implemented in MCP route handler (`Authorization: Bearer` validation)
+- REST API endpoints for all trading actions (pending -- MCP server covers agent access)
+- ~~MCP server with all trading tools~~ Implemented at `app/api/mcp/route.ts` with 9 tools
+- ~~OpenClaw skill~~ Implemented at `openclaw-skill/` with manifest, strategy, and README
+- ~~Core trading logic extraction~~ `lib/trading.ts` with shared business logic used by both server actions and MCP
+- ~~Browser automation demo~~ `agents/` with Playwright runner, 4 LLM adapters (Claude, GPT, Gemini, Groq/Llama)
+- A2A Agent Card (pending)
+- Rate limiting and safety controls (pending)
 
 ### Phase 4: Warehouse and Cash Out -- COMPLETE
 - Intake request flow (user-facing form, photo upload, warehouse assignment, shipping label)
@@ -960,7 +1075,7 @@ To add or change seed items, edit `seed-data.json` and run `pnpm seed` again. To
 
 ---
 
-## 16. Coding Conventions
+## 17. Coding Conventions
 
 ### React: Dialog/Modal Initialization
 
