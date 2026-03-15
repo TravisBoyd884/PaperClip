@@ -2,120 +2,102 @@
 
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { WooOverlay } from "./woo-overlay";
 
 export type Woo = {
   id: string;
   title: string;
+  description: string | null;
   images: string[];
   estimated_value: number | null;
   category: string;
   trade_count: number;
   status: string;
+  condition: string;
 };
 
-const HEX_CLIP =
-  "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)";
-
-const categoryLabels: Record<string, string> = {
-  office: "Office",
-  electronics: "Electronics",
-  furniture: "Furniture",
-  collectible: "Collectible",
-  other: "Other",
+const conditionLabels: Record<string, string> = {
+  new: "New",
+  like_new: "Like New",
+  good: "Good",
+  fair: "Fair",
+  poor: "Poor",
 };
 
-type ValueTier = {
-  bg: string;
-  isRainbow?: boolean;
-};
-
-function getValueTier(value: number | null): ValueTier {
-  if (value == null) return { bg: "bg-border" };
-  if (value < 5) return { bg: "bg-orange-200" };
-  if (value < 10) return { bg: "bg-orange-300" };
-  if (value < 20) return { bg: "bg-orange-400" };
-  if (value < 80) return { bg: "bg-rose-400" };
-  if (value < 200) return { bg: "bg-rose-500" };
-  if (value < 500) return { bg: "bg-amber-500" };
-  return { bg: "", isRainbow: true };
-}
 
 export function WooGrid({ woos }: { woos: Woo[] }) {
   const [selectedWoo, setSelectedWoo] = useState<Woo | null>(null);
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 sm:gap-6 sm:grid-cols-3 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {woos.map((woo) => {
           const isActive = woo.status === "active";
-          const tier = getValueTier(
-            woo.estimated_value != null ? Number(woo.estimated_value) : null
-          );
-
           return (
             <button
               key={woo.id}
               onClick={() => isActive && setSelectedWoo(woo)}
-              className={`group flex flex-col items-center gap-3 text-center transition-transform ${
+              className={`text-left transition-transform ${
                 isActive
-                  ? "cursor-pointer hover:scale-105"
+                  ? "cursor-pointer hover:scale-[1.02]"
                   : "cursor-default opacity-50"
               }`}
             >
-              <div className="relative w-full aspect-[1/1.15]">
-                {/* Border layer */}
-                <div
-                  className={`absolute inset-0 ${tier.isRainbow ? "woo-rainbow" : tier.bg}`}
-                  style={{ clipPath: HEX_CLIP }}
-                />
-
-                {/* Image layer (inset to reveal border) */}
-                <div
-                  className="absolute inset-[3px] overflow-hidden"
-                  style={{ clipPath: HEX_CLIP }}
-                >
+              <Card className="overflow-hidden shadow-sm">
+                <div className="relative aspect-[4/3] w-full overflow-hidden">
                   {woo.images?.[0] ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={woo.images[0]}
                       alt={woo.title}
-                      className="h-full w-full object-cover transition-transform group-hover:scale-110"
+                      className="h-full w-full object-cover"
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center bg-muted text-muted-foreground text-sm">
                       No image
                     </div>
                   )}
-                </div>
 
-                {!isActive && (
-                  <div
-                    className="absolute inset-0 flex items-center justify-center"
-                    style={{ clipPath: HEX_CLIP }}
-                  >
-                    <Badge variant="secondary" className="text-xs">
-                      Cashed Out
-                    </Badge>
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-0.5 sm:space-y-1">
-                <p className="text-xs sm:text-sm font-medium leading-tight line-clamp-1 sm:line-clamp-2">
-                  {woo.title}
-                </p>
-                <div className="flex items-center justify-center gap-1 sm:gap-1.5 flex-wrap">
-                  <Badge variant="outline" className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0">
-                    {categoryLabels[woo.category] || woo.category}
-                  </Badge>
-                  {woo.estimated_value != null && (
-                    <span className="text-[10px] sm:text-xs text-muted-foreground">
-                      ${Number(woo.estimated_value).toFixed(2)}
-                    </span>
+                  {!isActive && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                      <Badge variant="secondary" className="text-xs">
+                        Cashed Out
+                      </Badge>
+                    </div>
                   )}
                 </div>
-              </div>
+
+                <CardHeader className="pb-0">
+                  <CardTitle className="line-clamp-1 text-sm sm:text-base">
+                    {woo.title}
+                  </CardTitle>
+                </CardHeader>
+
+                <CardContent className="space-y-2">
+                  {woo.description && (
+                    <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">
+                      {woo.description}
+                    </p>
+                  )}
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                      {conditionLabels[woo.condition] ?? woo.condition}
+                    </Badge>
+                    {woo.estimated_value != null && (
+                      <span className="text-[10px] sm:text-xs text-muted-foreground">
+                        ${Number(woo.estimated_value).toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             </button>
           );
         })}

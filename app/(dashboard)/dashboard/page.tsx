@@ -18,7 +18,7 @@ export default async function DashboardPage() {
 
   const { data: woos } = await supabase
     .from("woos")
-    .select("id, title, images, estimated_value, category, trade_count, status")
+    .select("id, title, description, images, estimated_value, category, trade_count, status, condition")
     .eq("owner_id", user.id)
     .in("status", ["active", "cashed_out", "burned"])
     .order("created_at", { ascending: false });
