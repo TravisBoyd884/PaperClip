@@ -34,6 +34,26 @@ export type MatchSummary = {
   woo_unavailable: boolean;
 };
 
+export type TradeWooInfo = {
+  id: string;
+  woo_id: string;
+  title: string;
+  images: string[];
+  estimated_value: number | null;
+  side: "a" | "b";
+};
+
+export type TradeInfo = {
+  id: string;
+  status: string;
+  proposed_by: string;
+  approved_by_a: boolean;
+  approved_by_b: boolean;
+  completed_at: string | null;
+  created_at: string;
+  trade_woos: TradeWooInfo[];
+};
+
 export type MatchDetail = {
   id: string;
   status: string;
@@ -48,16 +68,6 @@ export type MatchDetail = {
   user_a: MatchProfile;
   user_b: MatchProfile;
   active_trade: TradeInfo | null;
-};
-
-export type TradeInfo = {
-  id: string;
-  status: string;
-  proposed_by: string;
-  approved_by_a: boolean;
-  approved_by_b: boolean;
-  completed_at: string | null;
-  created_at: string;
 };
 
 export type MessageInfo = {
@@ -190,7 +200,6 @@ export async function getMyMatches(): Promise<{
     const counterpartyId =
       m.user_a_id === user.id ? m.user_b_id : m.user_a_id;
     const profile = profileMap.get(counterpartyId);
-    // woo_a and woo_b come back as single objects from the join
     const wooA = m.woo_a as unknown as MatchWoo;
     const wooB = m.woo_b as unknown as MatchWoo;
 
@@ -220,6 +229,38 @@ export async function getMyMatches(): Promise<{
   });
 
   return { data: result, userId: user.id };
+}
+
+async function fetchTradeWoos(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  tradeId: string
+): Promise<TradeWooInfo[]> {
+  const { data: tradeWooRows } = await supabase
+    .from("trade_woos")
+    .select("id, woo_id, side")
+    .eq("trade_id", tradeId);
+
+  if (!tradeWooRows?.length) return [];
+
+  const wooIds = tradeWooRows.map((tw) => tw.woo_id);
+  const { data: woos } = await supabase
+    .from("woos")
+    .select("id, title, images, estimated_value")
+    .in("id", wooIds);
+
+  const wooMap = new Map((woos ?? []).map((w) => [w.id, w]));
+
+  return tradeWooRows.map((tw) => {
+    const woo = wooMap.get(tw.woo_id);
+    return {
+      id: tw.id,
+      woo_id: tw.woo_id,
+      title: woo?.title ?? "Unknown",
+      images: woo?.images ?? [],
+      estimated_value: woo?.estimated_value ?? null,
+      side: tw.side as "a" | "b",
+    };
+  });
 }
 
 export async function getMatchDetails(
@@ -273,7 +314,8 @@ export async function getMatchDetails(
     .limit(1);
 
   if (trades?.length) {
-    activeTrade = trades[0];
+    const tradeWoos = await fetchTradeWoos(supabase, trades[0].id);
+    activeTrade = { ...trades[0], trade_woos: tradeWoos };
   }
 
   return {
@@ -392,7 +434,8 @@ export async function sendMessage(
 }
 
 export async function proposeTrade(
-  matchId: string
+  matchId: string,
+  myWooIds?: string[]
 ): Promise<{ data: TradeInfo | null; error?: string }> {
   const supabase = await createClient();
   const {
@@ -426,31 +469,55 @@ export async function proposeTrade(
     return { data: null, error: "A trade is already pending for this match" };
   }
 
+  const isUserA = match.user_a_id === user.id;
+
+  const sideAWooIds = isUserA
+    ? (myWooIds?.length ? myWooIds : [match.woo_a_id])
+    : [match.woo_a_id];
+  const sideBWooIds = isUserA
+    ? [match.woo_b_id]
+    : (myWooIds?.length ? myWooIds : [match.woo_b_id]);
+
+  const allWooIds = [...new Set([...sideAWooIds, ...sideBWooIds])];
+
   const { data: woos } = await supabase
     .from("woos")
     .select("id, status, owner_id")
-    .in("id", [match.woo_a_id, match.woo_b_id]);
+    .in("id", allWooIds);
 
-  const wooA = woos?.find((w) => w.id === match.woo_a_id);
-  const wooB = woos?.find((w) => w.id === match.woo_b_id);
-
-  if (
-    !wooA || !wooB ||
-    wooA.status !== "active" || wooB.status !== "active" ||
-    wooA.owner_id !== match.user_a_id || wooB.owner_id !== match.user_b_id
-  ) {
-    await supabase
-      .from("matches")
-      .update({ status: "trade_unavailable" })
-      .eq("id", matchId);
-
-    return {
-      data: null,
-      error: "One of the Woos is no longer available for trading",
-    };
+  if (!woos) {
+    return { data: null, error: "Could not verify Woos" };
   }
 
-  const isUserA = match.user_a_id === user.id;
+  const wooMap = new Map(woos.map((w) => [w.id, w]));
+
+  for (const wooId of sideAWooIds) {
+    const w = wooMap.get(wooId);
+    if (!w || w.status !== "active" || w.owner_id !== match.user_a_id) {
+      await supabase
+        .from("matches")
+        .update({ status: "trade_unavailable" })
+        .eq("id", matchId);
+      return {
+        data: null,
+        error: "One of the Woos is no longer available for trading",
+      };
+    }
+  }
+
+  for (const wooId of sideBWooIds) {
+    const w = wooMap.get(wooId);
+    if (!w || w.status !== "active" || w.owner_id !== match.user_b_id) {
+      await supabase
+        .from("matches")
+        .update({ status: "trade_unavailable" })
+        .eq("id", matchId);
+      return {
+        data: null,
+        error: "One of the Woos is no longer available for trading",
+      };
+    }
+  }
 
   const { data: trade, error: tradeErr } = await supabase
     .from("trades")
@@ -469,6 +536,21 @@ export async function proposeTrade(
 
   if (tradeErr) return { data: null, error: tradeErr.message };
 
+  const tradeWooInserts = [
+    ...sideAWooIds.map((wooId) => ({
+      trade_id: trade.id,
+      woo_id: wooId,
+      side: "a" as const,
+    })),
+    ...sideBWooIds.map((wooId) => ({
+      trade_id: trade.id,
+      woo_id: wooId,
+      side: "b" as const,
+    })),
+  ];
+
+  await supabase.from("trade_woos").insert(tradeWooInserts);
+
   await supabase
     .from("matches")
     .update({ status: "trade_proposed" })
@@ -481,9 +563,11 @@ export async function proposeTrade(
     message_type: "trade_proposal",
   });
 
+  const tradeWoos = await fetchTradeWoos(supabase, trade.id);
+
   revalidatePath(`/matches/${matchId}`);
   revalidatePath("/matches");
-  return { data: trade };
+  return { data: { ...trade, trade_woos: tradeWoos } };
 }
 
 export async function approveTrade(
@@ -518,33 +602,50 @@ export async function approveTrade(
     return { success: false, error: "Not a participant" };
   }
 
+  const { data: tradeWooRows } = await supabase
+    .from("trade_woos")
+    .select("woo_id, side")
+    .eq("trade_id", tradeId);
+
+  const allWooIds = (tradeWooRows ?? []).map((tw) => tw.woo_id);
+
+  if (allWooIds.length === 0) {
+    allWooIds.push(trade.woo_a_id, trade.woo_b_id);
+  }
+
   const { data: woos } = await supabase
     .from("woos")
     .select("id, status, owner_id")
-    .in("id", [trade.woo_a_id, trade.woo_b_id]);
+    .in("id", allWooIds);
 
-  const wooA = woos?.find((w) => w.id === trade.woo_a_id);
-  const wooB = woos?.find((w) => w.id === trade.woo_b_id);
+  const wooMap = new Map((woos ?? []).map((w) => [w.id, w]));
 
-  if (
-    !wooA || !wooB ||
-    wooA.status !== "active" || wooB.status !== "active" ||
-    wooA.owner_id !== match.user_a_id || wooB.owner_id !== match.user_b_id
-  ) {
-    await supabase
-      .from("trades")
-      .update({ status: "cancelled" })
-      .eq("id", tradeId);
+  const twRows = tradeWooRows?.length
+    ? tradeWooRows
+    : [
+        { woo_id: trade.woo_a_id, side: "a" },
+        { woo_id: trade.woo_b_id, side: "b" },
+      ];
 
-    await supabase
-      .from("matches")
-      .update({ status: "trade_unavailable" })
-      .eq("id", trade.match_id);
+  for (const tw of twRows) {
+    const w = wooMap.get(tw.woo_id);
+    const expectedOwner = tw.side === "a" ? match.user_a_id : match.user_b_id;
+    if (!w || w.status !== "active" || w.owner_id !== expectedOwner) {
+      await supabase
+        .from("trades")
+        .update({ status: "cancelled" })
+        .eq("id", tradeId);
 
-    return {
-      success: false,
-      error: "One of the Woos is no longer available for trading",
-    };
+      await supabase
+        .from("matches")
+        .update({ status: "trade_unavailable" })
+        .eq("id", trade.match_id);
+
+      return {
+        success: false,
+        error: "One of the Woos is no longer available for trading",
+      };
+    }
   }
 
   const isUserA = match.user_a_id === user.id;
@@ -696,4 +797,22 @@ export async function dismissMatch(
 
   revalidatePath("/matches");
   return { success: true };
+}
+
+export async function getMyActiveWoosForTrade() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return [];
+
+  const { data } = await supabase
+    .from("woos")
+    .select("id, title, images, estimated_value, category")
+    .eq("owner_id", user.id)
+    .eq("status", "active")
+    .order("created_at", { ascending: false });
+
+  return data || [];
 }

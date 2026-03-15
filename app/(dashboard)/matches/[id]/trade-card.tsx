@@ -12,21 +12,82 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { approveTrade, cancelTrade } from "../actions";
-import type { TradeInfo } from "../actions";
+import type { TradeInfo, TradeWooInfo } from "../actions";
+
+const HEX_CLIP =
+  "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)";
+
+function TinyHex({ image, title }: { image?: string; title: string }) {
+  return (
+    <div className="relative w-7 h-[32px] shrink-0">
+      <div
+        className="absolute inset-0 bg-border"
+        style={{ clipPath: HEX_CLIP }}
+      />
+      <div
+        className="absolute inset-[1.5px] overflow-hidden bg-muted"
+        style={{ clipPath: HEX_CLIP }}
+      >
+        {image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={image}
+            alt={title}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-muted-foreground text-[6px]">
+            ?
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function WooSide({ woos, label }: { woos: TradeWooInfo[]; label: string }) {
+  const totalValue = woos.reduce(
+    (sum, w) => sum + (w.estimated_value ?? 0),
+    0
+  );
+
+  return (
+    <div className="flex flex-col items-center gap-1 min-w-0">
+      <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+        {label}
+      </span>
+      <div className="flex -space-x-1">
+        {woos.map((w) => (
+          <TinyHex key={w.woo_id} image={w.images?.[0]} title={w.title} />
+        ))}
+      </div>
+      <div className="text-center min-w-0">
+        {woos.length === 1 ? (
+          <p className="text-xs font-medium truncate max-w-[100px]">
+            {woos[0].title}
+          </p>
+        ) : (
+          <p className="text-xs font-medium">{woos.length} Woos</p>
+        )}
+        {totalValue > 0 && (
+          <p className="text-[10px] text-muted-foreground">
+            ${totalValue.toFixed(2)}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function TradeCard({
   trade,
   currentUserId,
   userAId,
-  wooATitle,
-  wooBTitle,
   onTradeUpdated,
 }: {
   trade: TradeInfo;
   currentUserId: string;
   userAId: string;
-  wooATitle: string;
-  wooBTitle: string;
   onTradeUpdated: () => void;
 }) {
   const [loading, setLoading] = useState<"approve" | "cancel" | null>(null);
@@ -36,6 +97,10 @@ export function TradeCard({
   const otherApproved = isUserA ? trade.approved_by_b : trade.approved_by_a;
   const isCompleted = trade.status === "completed";
   const isCancelled = trade.status === "cancelled";
+
+  const sideAWoos = trade.trade_woos.filter((tw) => tw.side === "a");
+  const sideBWoos = trade.trade_woos.filter((tw) => tw.side === "b");
+  const hasMultiWoo = trade.trade_woos.length > 2;
 
   async function handleApprove() {
     setLoading("approve");
@@ -79,9 +144,17 @@ export function TradeCard({
           <p className="text-sm font-semibold text-green-700 dark:text-green-400">
             Trade Completed!
           </p>
-          <p className="text-xs text-muted-foreground">
-            {wooATitle} ⇄ {wooBTitle}
-          </p>
+          {trade.trade_woos.length > 0 ? (
+            <div className="flex items-center gap-3">
+              <WooSide woos={sideAWoos} label="Side A" />
+              <span className="text-lg text-muted-foreground">⇄</span>
+              <WooSide woos={sideBWoos} label="Side B" />
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Woos have been swapped
+            </p>
+          )}
         </div>
       </Card>
     );
@@ -102,12 +175,28 @@ export function TradeCard({
       <div className="space-y-3">
         <div className="flex items-center justify-center gap-2">
           <ArrowLeftRight className="h-4 w-4 text-primary" />
-          <p className="text-sm font-semibold">Trade Proposal</p>
+          <p className="text-sm font-semibold">
+            Trade Proposal{hasMultiWoo ? " (Multi-Woo)" : ""}
+          </p>
         </div>
 
-        <p className="text-xs text-center text-muted-foreground">
-          {wooATitle} ⇄ {wooBTitle}
-        </p>
+        {trade.trade_woos.length > 0 ? (
+          <div className="flex items-center justify-center gap-4">
+            <WooSide
+              woos={sideAWoos}
+              label={isUserA ? "Yours" : "Theirs"}
+            />
+            <span className="text-lg text-muted-foreground">⇄</span>
+            <WooSide
+              woos={sideBWoos}
+              label={isUserA ? "Theirs" : "Yours"}
+            />
+          </div>
+        ) : (
+          <p className="text-xs text-center text-muted-foreground">
+            Trade details loading...
+          </p>
+        )}
 
         <div className="flex items-center justify-center gap-4 text-xs">
           <span
@@ -117,7 +206,8 @@ export function TradeCard({
                 : "text-muted-foreground"
             }
           >
-            {trade.approved_by_a ? "✓" : "○"} User A
+            {trade.approved_by_a ? "✓" : "○"}{" "}
+            {isUserA ? "You" : "Them"}
           </span>
           <span
             className={
@@ -126,7 +216,8 @@ export function TradeCard({
                 : "text-muted-foreground"
             }
           >
-            {trade.approved_by_b ? "✓" : "○"} User B
+            {trade.approved_by_b ? "✓" : "○"}{" "}
+            {isUserA ? "Them" : "You"}
           </span>
         </div>
 

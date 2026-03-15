@@ -10,6 +10,7 @@ export type FeedWoo = {
   description: string | null;
   images: string[];
   category: string;
+  condition: string;
   estimated_value: number | null;
   trade_count: number;
   owner_username: string | null;
@@ -17,8 +18,18 @@ export type FeedWoo = {
   owner_is_agent: boolean;
 };
 
+export type SwipeFilters = {
+  category?: string;
+  condition?: string;
+  minValue?: number;
+  maxValue?: number;
+  nameSearch?: string;
+  swiperValue?: number;
+};
+
 export async function getSwipeFeed(
   swiperWooId: string,
+  filters?: SwipeFilters,
   limit = 20
 ): Promise<{ data: FeedWoo[]; error?: string }> {
   const supabase = await createClient();
@@ -33,6 +44,12 @@ export async function getSwipeFeed(
     p_user_id: user.id,
     p_swiper_woo_id: swiperWooId,
     p_limit: limit,
+    p_category: filters?.category ?? null,
+    p_condition: filters?.condition ?? null,
+    p_min_value: filters?.minValue ?? null,
+    p_max_value: filters?.maxValue ?? null,
+    p_name_search: filters?.nameSearch ?? null,
+    p_swiper_value: filters?.swiperValue ?? null,
   });
 
   if (error) return { data: [], error: error.message };
@@ -44,6 +61,7 @@ export async function getSwipeFeed(
       description: row.description as string | null,
       images: row.images as string[],
       category: row.category as string,
+      condition: row.condition as string,
       estimated_value: row.estimated_value as number | null,
       trade_count: row.trade_count as number,
       owner_username: row.owner_username as string | null,

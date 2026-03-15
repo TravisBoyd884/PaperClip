@@ -68,6 +68,8 @@ User browses the swipe feed (Woos from other users)
 
 **Trade states**: `pending` -> `approved_by_a` | `approved_by_b` -> `completed` | `cancelled`
 
+**Multi-Woo trades**: Users can propose trades with multiple Woos on either side (N:M). During swiping, users select one or more of their Woos to offer, affecting the feed's value-based recommendations. Matching remains 1:1 (based on the primary Woo). After matching, in the chat, users can propose trades that include additional Woos from their side. The `trade_woos` join table tracks all Woos in each trade.
+
 **Trade availability validation** (defense-in-depth):
 - **Database layer** (`execute_trade()`): Before swapping ownership, locks both Woos and verifies they are still `active` and owned by the expected match participants. Sets the match to `trade_unavailable` if validation fails. After a successful swap, proactively sets all other open matches referencing either traded Woo to `trade_unavailable` and cancels their pending trades.
 - **Server action layer** (`proposeTrade()`, `approveTrade()`): Checks Woo status and ownership before creating or approving a trade. Sets the match to `trade_unavailable` (and cancels the trade, if applicable) and returns a user-facing error if a Woo is unavailable.
@@ -174,6 +176,7 @@ The tradeable digital representation.
 | `description` | `text` | User-facing description |
 | `images` | `text[]` | Supabase Storage URLs (may differ from item photos) |
 | `category` | `text` | e.g. `office`, `electronics`, `furniture`, `collectible`, `other` |
+| `condition` | `text` | `new`, `like_new`, `good`, `fair`, `poor` (copied from item at mint) |
 | `estimated_value` | `numeric` | Optional estimated dollar value for sorting/filtering |
 | `trade_count` | `integer` | How many times this Woo has been traded (starts at 0) |
 | `status` | `text` | `active`, `in_trade`, `cashed_out`, `burned` |
@@ -240,9 +243,23 @@ Tracks the trade lifecycle after both users agree.
 | `completed_at` | `timestamptz` | |
 | `created_at` | `timestamptz` | |
 
-**Trade execution**: When both `approved_by_a` and `approved_by_b` are `true`, a database function atomically swaps `woos.owner_id` for both Woos, sets the trade status to `completed`, and increments `trade_count` on both Woos.
+**Trade execution**: When both `approved_by_a` and `approved_by_b` are `true`, a database function atomically swaps `woos.owner_id` for all Woos in the trade (via `trade_woos`), sets the trade status to `completed`, and increments `trade_count` on all traded Woos. The `woo_a_id`/`woo_b_id` columns are kept for backward compatibility but `trade_woos` is the source of truth.
 
-### 5.9 `cashouts`
+### 5.9 `trade_woos`
+
+Join table that tracks which Woos are included in a trade. Supports multi-Woo trades (N:M).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `uuid` PK | |
+| `trade_id` | `uuid` FK | References `trades(id)` ON DELETE CASCADE |
+| `woo_id` | `uuid` FK | References `woos(id)` |
+| `side` | `text` | `a` or `b` -- which side of the trade this Woo belongs to |
+| `created_at` | `timestamptz` | |
+
+**Unique constraint**: `(trade_id, woo_id)` -- a Woo can only appear once per trade.
+
+### 5.10 `cashouts`
 
 | Column | Type | Notes |
 |---|---|---|
@@ -256,7 +273,7 @@ Tracks the trade lifecycle after both users agree.
 | `created_at` | `timestamptz` | |
 | `updated_at` | `timestamptz` | |
 
-### 5.10 `agent_keys`
+### 5.11 `agent_keys`
 
 API keys for agent authentication.
 
@@ -274,7 +291,7 @@ API keys for agent authentication.
 | `last_used_at` | `timestamptz` | |
 | `created_at` | `timestamptz` | |
 
-### 5.11 `warehouse_staff`
+### 5.12 `warehouse_staff`
 
 Links user profiles to warehouses they manage. Used for admin panel authorization.
 
@@ -288,13 +305,13 @@ Links user profiles to warehouses they manage. Used for admin panel authorizatio
 
 **Unique constraint**: `(profile_id, warehouse_id)` -- a user can only have one role per warehouse.
 
-### 5.12 Key Database Functions
+### 5.13 Key Database Functions
 
-- **`execute_trade(trade_id)`**: Atomically swaps Woo ownership when both parties approve. Locks both Woos with `FOR UPDATE`, verifies both are `active` and still owned by the match participants, then swaps. Sets match to `trade_unavailable` if validation fails. After a successful swap, proactively marks all other open matches referencing either traded Woo as `trade_unavailable` and cancels their pending trades. Runs as `SECURITY DEFINER`.
+- **`execute_trade(trade_id)`**: Atomically swaps Woo ownership when both parties approve. Reads all Woos from `trade_woos` join table (supports N:M multi-Woo trades), locks each with `FOR UPDATE`, verifies all are `active` and owned by the expected party, then transfers side-a Woos to user B and side-b Woos to user A. Sets match to `trade_unavailable` if validation fails. After a successful swap, proactively marks all other open matches referencing any traded Woo as `trade_unavailable` and cancels their pending trades. Runs as `SECURITY DEFINER`.
 - **`check_match(swiper_woo_id, target_woo_id)`**: Called after every right-swipe to check if a reciprocal swipe exists. Verifies both Woos are `active` before creating a match; returns null if either Woo is unavailable.
 - **`burn_woo(woo_id)`**: Sets a Woo's status to `burned` during cash out. Validates the Woo is not in an active trade.
 - **`mint_woo(item_id)`**: Atomically creates a Woo from a verified item. Validates the item is in `verified` status, creates the Woo with data inherited from the item (name, description, photos, category, estimated_value), sets item status to `stored`, and increments `warehouses.current_count`. Runs as `SECURITY DEFINER`.
-- **`get_swipe_feed(user_id, swiper_woo_id, limit)`**: Returns swipeable Woos for the given user and swiper Woo. Filters to `active` Woos not owned by the user, excludes already-swiped targets, orders randomly, and joins owner profile data (username, avatar, is_agent). Runs as `SECURITY DEFINER`.
+- **`get_swipe_feed(user_id, swiper_woo_id, limit, category, condition, min_value, max_value, name_search, swiper_value)`**: Returns swipeable Woos for the given user and swiper Woo. Filters to `active` Woos not owned by the user, excludes already-swiped targets, and applies optional filters (category, condition, price range, name search). Orders by closest estimated value to `swiper_value` (combined value of user's selected Woos) with random tiebreaker. Joins owner profile data (username, avatar, is_agent). Runs as `SECURITY DEFINER`.
 
 ### 5.13 Row-Level Security (RLS) Policies
 
@@ -305,6 +322,7 @@ All tables have RLS enabled. Key policies:
 - Users can only create swipes from their own Woos.
 - Agent keys are only visible to the owning user.
 - Trade approval can only be set by the respective participant.
+- `trade_woos` rows are readable and insertable by participants of the associated match.
 - Warehouse data is read-only for regular users.
 - Warehouse staff can read and update items and cashouts in their assigned warehouse.
 - Warehouse staff can read their own staff records.
@@ -619,9 +637,12 @@ Pages marked with `*` are not yet implemented.
 
 ### 9.2 Swipe Interface
 
-- Card-based UI showing the Woo's image, title, category, estimated value, and trade count.
+- Card-based UI showing the Woo's image, title, category, condition, estimated value, and trade count.
 - Swipe gestures (mobile) and button controls (desktop).
-- Users select which of their Woos they are offering before swiping.
+- Users select one or more of their Woos to offer before swiping (multi-Woo selection with combined value display).
+- Small hexagonal Woo previews shown next to the "Trading with" selector.
+- Collapsible filter panel: category, condition, price range (+/- $X from combined value), and name search.
+- Feed ordered by closest estimated value to the user's combined offering value.
 - Animated transitions for swipe feedback.
 - "It's a match!" modal when a mutual swipe occurs.
 
@@ -707,7 +728,7 @@ These features are not part of the initial build but should be considered in arc
 
 - **Woo valuation engine**: Market-driven price signals based on trade history, demand, and category trends. Could use an LLM to estimate relative value.
 - **Reputation scores**: Track trading history and reliability. Agents and humans both earn reputation.
-- **Multi-item bundle trades**: Trade multiple Woos in a single transaction.
+- ~~**Multi-item bundle trades**: Trade multiple Woos in a single transaction.~~ (Implemented via `trade_woos` join table)
 - **Auction mode**: Multiple users bid on a desirable Woo, highest bidder wins.
 - **Agent strategy marketplace**: Users share and sell trading strategy prompts for agents.
 - **Physical item verification**: AI-powered photo verification comparing intake photos with the item description.
@@ -828,7 +849,11 @@ paperclip/
 │   │   ├── 20250314000001_seed_warehouses.sql     # 1 seed warehouse (PaperClip West)
 │   │   ├── 20250314000002_warehouse_staff.sql     # warehouse_staff table, admin RLS, mint_woo
 │   │   ├── 20250314000003_swipe_feed_function.sql # get_swipe_feed() DB function
-│   │   └── 20250314000004_user_estimated_value.sql # Move estimated_value from admin mint to user intake
+│   │   ├── 20250314000004_user_estimated_value.sql # Move estimated_value from admin mint to user intake
+│   │   ├── 20250314000005_trade_availability_checks.sql # Defense-in-depth trade validation
+│   │   ├── 20250314000006_match_cleanup.sql       # trade_unavailable/dismissed statuses, sibling match cleanup
+│   │   ├── 20250314000007_swipe_filters.sql       # Add condition to woos, swipe feed filters + value-based ordering
+│   │   └── 20250314000008_multi_woo_trades.sql    # trade_woos join table for N:M trades
 │   ├── seed-data.json              # Configurable seed items for test users (read by scripts/seed.ts)
 │   └── seed.sql                    # Seed data (warehouses)
 ├── scripts/
