@@ -17,6 +17,7 @@ export interface AgentConfig {
   model: string;
   llm: AgentLLM;
   preferences: AgentPreferences;
+  preferenceEmbedding: number[] | null;
 }
 
 interface SeedDemoUser {
@@ -54,7 +55,12 @@ function loadPreferencesFromSeed(email: string): AgentPreferences {
   return EMPTY_PREFS;
 }
 
-async function loadPreferencesFromDB(email: string): Promise<{ prefs: AgentPreferences; swipeModel?: string; chatModel?: string } | null> {
+async function loadPreferencesFromDB(email: string): Promise<{
+  prefs: AgentPreferences;
+  swipeModel?: string;
+  chatModel?: string;
+  preferenceEmbedding: number[] | null;
+} | null> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceKey) return null;
@@ -63,13 +69,27 @@ async function loadPreferencesFromDB(email: string): Promise<{ prefs: AgentPrefe
     const supabase = createClient(supabaseUrl, serviceKey);
     const { data } = await supabase
       .from("profiles")
-      .select("agent_preferences")
+      .select("agent_preferences, preference_embedding")
       .eq("email", email)
       .single();
 
     if (!data?.agent_preferences) return null;
 
     const dbPrefs = data.agent_preferences as DBAgentPreferences;
+    const rawEmbedding = data.preference_embedding;
+    let preferenceEmbedding: number[] | null = null;
+    if (rawEmbedding) {
+      if (Array.isArray(rawEmbedding)) {
+        preferenceEmbedding = rawEmbedding as number[];
+      } else if (typeof rawEmbedding === "string") {
+        try {
+          preferenceEmbedding = JSON.parse(
+            (rawEmbedding as string).replace(/^\[/, "[").replace(/\]$/, "]")
+          );
+        } catch {}
+      }
+    }
+
     return {
       prefs: {
         wants: dbPrefs.wants ?? [],
@@ -78,6 +98,7 @@ async function loadPreferencesFromDB(email: string): Promise<{ prefs: AgentPrefe
       },
       swipeModel: dbPrefs.swipe_model,
       chatModel: dbPrefs.chat_model,
+      preferenceEmbedding,
     };
   } catch {
     return null;
@@ -114,6 +135,7 @@ export async function loadAgentConfigs(): Promise<AgentConfig[]> {
       model: "claude",
       llm: new ClaudeAdapter(anthropicKey, dbResult?.chatModel, dbResult?.swipeModel),
       preferences,
+      preferenceEmbedding: dbResult?.preferenceEmbedding ?? null,
     });
   } else {
     console.warn("ANTHROPIC_API_KEY not set — skipping Claude agent");
@@ -132,6 +154,7 @@ export async function loadAgentConfigs(): Promise<AgentConfig[]> {
       model: "gpt",
       llm: new OpenAIAdapter(openaiKey, dbResult?.chatModel, dbResult?.swipeModel),
       preferences,
+      preferenceEmbedding: dbResult?.preferenceEmbedding ?? null,
     });
   } else {
     console.warn("OPENAI_API_KEY not set — skipping GPT agent");
@@ -150,6 +173,7 @@ export async function loadAgentConfigs(): Promise<AgentConfig[]> {
       model: "gemini",
       llm: new GeminiAdapter(geminiKey, dbResult?.chatModel, dbResult?.swipeModel),
       preferences,
+      preferenceEmbedding: dbResult?.preferenceEmbedding ?? null,
     });
   } else {
     console.warn("GOOGLE_AI_API_KEY not set — skipping Gemini agent");
@@ -168,6 +192,7 @@ export async function loadAgentConfigs(): Promise<AgentConfig[]> {
       model: "groq",
       llm: new GroqAdapter(groqKey, dbResult?.chatModel, dbResult?.swipeModel),
       preferences,
+      preferenceEmbedding: dbResult?.preferenceEmbedding ?? null,
     });
   } else {
     console.warn("GROQ_API_KEY not set — skipping Llama/Groq agent");

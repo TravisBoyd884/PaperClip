@@ -105,6 +105,7 @@ User requests cash out for a Woo they own
 | File Storage | Supabase Storage (Woo images, item photos) |
 | UI Components | Shadcn/ui |
 | Styling | Tailwind CSS v4 |
+| Embeddings | Supabase pgvector + OpenAI text-embedding-3-small |
 | Deployment | Vercel |
 | Agent Protocols | MCP, A2A, REST API |
 
@@ -125,6 +126,7 @@ Extends Supabase Auth `auth.users`. Created via trigger on user signup.
 | `agent_framework` | `text` | e.g. `openclaw`, `langchain`, `custom` (nullable) |
 | `agent_description` | `text` | Public description of what the agent does (nullable) |
 | `agent_preferences` | `jsonb` | Structured agent config: `{ wants, willing_to_trade, personality, swipe_model, chat_model }` |
+| `preference_embedding` | `vector(1536)` | pgvector embedding of agent preferences for semantic feed ranking (generated when preferences are saved) |
 | `created_at` | `timestamptz` | |
 | `updated_at` | `timestamptz` | |
 
@@ -182,6 +184,7 @@ The tradeable digital representation.
 | `estimated_value` | `numeric` | Optional estimated dollar value for sorting/filtering |
 | `trade_count` | `integer` | How many times this Woo has been traded (starts at 0) |
 | `status` | `text` | `active`, `in_trade`, `cashed_out`, `burned` |
+| `embedding` | `vector(1536)` | pgvector embedding for semantic search/ranking (generated at mint time via OpenAI text-embedding-3-small) |
 | `created_at` | `timestamptz` | |
 | `updated_at` | `timestamptz` | |
 
@@ -313,7 +316,8 @@ Links user profiles to warehouses they manage. Used for admin panel authorizatio
 - **`check_match(swiper_woo_id, target_woo_id)`**: Called after every right-swipe to check if a reciprocal swipe exists. Verifies both Woos are `active` before creating a match; returns null if either Woo is unavailable.
 - **`burn_woo(woo_id)`**: Sets a Woo's status to `burned` during cash out. Validates the Woo is not in an active trade.
 - **`mint_woo(item_id)`**: Atomically creates a Woo from a verified item. Validates the item is in `verified` status, creates the Woo with data inherited from the item (name, description, photos, category, condition, estimated_value), sets item status to `stored`, and increments `warehouses.current_count`. Runs as `SECURITY DEFINER`.
-- **`get_swipe_feed(user_id, swiper_woo_id, limit, category, condition, min_value, max_value, name_search, swiper_value)`**: Returns swipeable Woos for the given user and swiper Woo. Filters to `active` Woos not owned by the user, excludes already-swiped targets, and applies optional filters (category, condition, price range, name search). Orders by closest estimated value to `swiper_value` (combined value of user's selected Woos) with random tiebreaker. Joins owner profile data (username, avatar, is_agent). Runs as `SECURITY DEFINER`.
+- **`get_swipe_feed(user_id, swiper_woo_id, limit, category, condition, min_value, max_value, name_search, swiper_value, wants_embedding)`**: Returns swipeable Woos for the given user and swiper Woo. Filters to `active` Woos not owned by the user, excludes already-swiped targets, and applies optional filters (category, condition, price range, name search). When `wants_embedding` is provided and Woos have embeddings, orders by cosine similarity (semantic relevance) first, then by value proximity with random tiebreaker. Returns a `similarity_score` column (0-1, null when embeddings unavailable). Runs as `SECURITY DEFINER`.
+- **`match_woos_by_embedding(query_embedding, match_count)`**: Returns Woos ordered by cosine similarity to the query embedding. Used for semantic item discovery independent of the swipe flow.
 
 ### 5.14 Row-Level Security (RLS) Policies
 
@@ -353,6 +357,23 @@ Functions: `getActiveWoos`, `getSwipeFeed`, `recordSwipe`, `getMatches`, `getMat
 - `validateAgentKey(key)`: SHA-256 hashes the key with `AGENT_KEY_SALT`, looks up `agent_keys` where `key_hash` matches and `is_active = true`. Returns `{ userId, keyId, permissions, rateLimit, dailyTradeLimit }` or null. Updates `last_used_at` on successful validation.
 - `createAgentKey(userId, name, permissions)`: Generates a random key with `pc_live_` prefix, hashes and stores it. Returns the plain key (shown once).
 - `extractBearerToken(header)`: Parses `Authorization: Bearer <token>` header.
+
+### 5.18 Embedding Generation (`lib/embeddings.ts`)
+
+Utilities for generating and storing pgvector embeddings using OpenAI's `text-embedding-3-small` model (1536 dimensions). All functions gracefully return `null` when `OPENAI_API_KEY` is unset or the API call fails.
+
+- `generateEmbedding(text)`: Calls OpenAI's `/v1/embeddings` endpoint via raw `fetch` (no npm dependency). Returns `number[] | null`.
+- `generateEmbeddings(texts)`: Batch version for multiple texts in a single API call.
+- `buildWooEmbeddingText(woo)`: Concatenates `title + description + category + condition` into embedding input text.
+- `buildPreferenceEmbeddingText(prefs)`: Concatenates `wants + willing_to_trade + personality` into embedding input text.
+- `storeWooEmbedding(wooId, embedding)`: Updates `woos.embedding` column via admin client.
+- `storePreferenceEmbedding(userId, embedding)`: Updates `profiles.preference_embedding` column via admin client.
+- `vectorToSql(embedding)`: Converts a `number[]` to pgvector's SQL string format `[x,y,z,...]`.
+
+**Embedding generation points**:
+- Woo embeddings are generated in `mintWoo()` (admin warehouse actions) after the Woo is created.
+- Preference embeddings are generated in `updateAgentConfig()` (settings actions) after preferences are saved.
+- Both are also generated during seed runs (`scripts/seed.ts`) when `OPENAI_API_KEY` is available.
 
 ---
 
@@ -786,7 +807,7 @@ AGENT_KEY_SALT=
 
 # Agent Demo — LLM API Keys (set in .agents.env)
 ANTHROPIC_API_KEY=
-OPENAI_API_KEY=
+OPENAI_API_KEY=              # Also used for embedding generation (text-embedding-3-small)
 GOOGLE_AI_API_KEY=
 GROQ_API_KEY=
 ```
@@ -882,6 +903,7 @@ paperclip/
 │   │   ├── server.ts               # Server Supabase client (cookie-based)
 │   │   └── admin.ts                # Service-role client (bypasses RLS)
 │   ├── trading.ts                  # Core trading logic (shared by server actions + MCP tools)
+│   ├── embeddings.ts               # pgvector embedding generation (OpenAI text-embedding-3-small) and storage
 │   ├── agent-auth.ts               # Agent key validation and creation
 │   └── utils.ts                    # cn() helper
 ├── supabase/
@@ -897,12 +919,13 @@ paperclip/
 │   │   ├── 20250314000007_swipe_filters.sql       # Add condition to woos, swipe feed filters + value-based ordering
 │   │   ├── 20250314000008_multi_woo_trades.sql    # trade_woos join table for N:M trades
 │   │   ├── 20250314000009_drop_old_swipe_feed.sql # Drop old 3-param get_swipe_feed overload
-│   │   └── 20250315000001_agent_preferences.sql  # agent_preferences jsonb column + avatars storage bucket
+│   │   ├── 20250315000001_agent_preferences.sql  # agent_preferences jsonb column + avatars storage bucket
+│   │   └── 20250315000002_pgvector_embeddings.sql # pgvector extension, embedding columns, HNSW index, semantic swipe feed
 │   ├── seed-data.json              # Themed seed items (Pokemon, MTG, sports, electronics) with real images and user preferences
 │   └── seed.sql                    # Seed data (warehouses)
 ├── agents/
-│   ├── runner.ts                  # Main orchestrator: launches browsers, round-robin trading, keyword filtering, auto-approve
-│   ├── config.ts                  # Agent configuration: DB preferences -> seed-data.json fallback, tiered model selection
+│   ├── runner.ts                  # Main orchestrator: launches browsers, round-robin trading, embedding similarity + keyword fallback, auto-approve
+│   ├── config.ts                  # Agent configuration: DB preferences + embeddings -> seed-data.json fallback, tiered model selection
 │   ├── llm-adapter.ts             # Common LLM interface + split system/user prompt builders (compact + full preferences)
 │   ├── browser-agent.ts           # Playwright page interaction helpers (DOM reading for Woos, chat, trade state)
 │   └── adapters/
@@ -1037,9 +1060,9 @@ Each agent has:
 
 Agents incorporate the user's **subject value** into every decision:
 
-- **Swipe**: Keyword pre-filtering first checks if the card title/description matches `wants` (auto-RIGHT) or `willing_to_trade` (auto-LEFT). Only ambiguous cards go to the LLM, using compact preferences (~15 tokens) in the system prompt.
+- **Swipe**: Embedding similarity pre-filtering first computes cosine similarity between the card embedding and the agent's preference embedding. If similarity >= 0.75, auto-RIGHT; if <= 0.3, auto-LEFT. Falls back to keyword matching when embeddings are unavailable. Only ambiguous cards go to the LLM, using compact preferences (~15 tokens) in the system prompt.
 - **Chat**: Agents discuss WHY they want the other party's item, referencing their full personality. The LLM generates natural, preference-aware conversation using the smarter chat model.
-- **Trade approval**: Auto-approve when receiving items matching `wants` keywords. Only ambiguous trades go to the LLM for evaluation.
+- **Trade approval**: Embedding similarity auto-approves when the incoming item embedding is >= 0.75 similar to the agent's preference embedding. Falls back to keyword matching, then LLM for ambiguous cases.
 
 ### 15.3 Chat-Driven Trade Proposals
 
@@ -1053,15 +1076,18 @@ Instead of immediately proposing a trade after the first message, agents now:
 
 ### 15.4 Token Optimizations
 
-Several strategies reduce LLM API costs by ~70-85%:
+Several strategies reduce LLM API costs by ~90-95%:
 
+- **pgvector embedding similarity**: Preference embeddings and Woo embeddings enable cosine similarity-based auto-swipe and auto-approve, replacing most LLM classification calls with sub-millisecond vector math. Similarity >= 0.75 = auto-RIGHT/approve, <= 0.3 = auto-LEFT. Uses OpenAI `text-embedding-3-small` (1536 dimensions, ~$0.02/1M tokens). Embeddings are generated once per Woo at mint time and once per preference update, making query-time cost effectively zero.
+- **Semantic feed ranking**: `get_swipe_feed()` accepts an optional `p_wants_embedding` parameter. When provided, Woos are ordered by cosine distance to the preference embedding, surfacing the most relevant items first and reducing total swipes needed.
 - **System prompt caching**: Prompt builders return `{ system, user }` instead of a single string. The system message (role + preferences) is static across sequential calls for the same agent, enabling Anthropic's automatic prompt caching (90% cost reduction on cached tokens).
 - **Compact preferences**: Swipe/trade prompts use a concise format (`"Wants: X. Trading away: Y."` ~15 tokens) instead of the full personality (~80 tokens). Chat prompts use the full format.
 - **Stripped descriptions**: Swipe prompts omit item descriptions — title + category + condition + value is sufficient for classification. Saves ~20-40 tokens per call.
 - **Tiered models**: Each adapter has a `classificationModel` (cheap) and `generationModel` (smart). Swipe and trade decisions use the classification model; chat uses the generation model.
-- **Keyword pre-filtering**: Before calling the LLM, check card text against `wants` (auto-RIGHT) and `willing_to_trade` (auto-LEFT) keywords. Eliminates ~70-80% of swipe LLM calls.
-- **Auto-approve trades**: When receiving items matching `wants` keywords, skip the LLM trade decision entirely.
+- **Keyword pre-filtering** (fallback): When embeddings are unavailable, check card text against `wants` (auto-RIGHT) and `willing_to_trade` (auto-LEFT) keywords. Eliminates ~70-80% of swipe LLM calls.
+- **Auto-approve trades**: Embedding similarity or keyword matching auto-approves trades, skipping the LLM trade decision entirely.
 - **Lower maxTokens**: Chat responses capped at 100 tokens (1-2 sentences); swipe/trade at 10.
+- **Graceful degradation**: All embedding operations fail silently. When `OPENAI_API_KEY` is unset or embedding generation fails, the system falls back to keyword pre-filtering and LLM classification with identical behavior to the pre-embedding architecture.
 
 | Adapter | Classification Model | Generation Model |
 |---|---|---|
@@ -1147,6 +1173,7 @@ All methods receive the agent's `AgentPreferences` and use split system/user pro
 - ~~Chat-driven trade proposals~~ Agents read chat messages from the DOM, pass full context to the LLM, and only propose trades when the LLM signals readiness (or after 4+ messages as fallback)
 - ~~Real Woo/chat DOM reading~~ Agents read actual Woo info (title, value) and chat messages from the page instead of using placeholders
 - ~~Token optimization~~ System prompt caching, tiered models (classification vs generation), keyword pre-filtering, auto-approve, compact preferences, stripped descriptions, lower maxTokens
+- ~~pgvector embeddings~~ Supabase pgvector for semantic Woo/preference embeddings (OpenAI text-embedding-3-small). Embedding-based swipe pre-filtering and semantic feed ranking replace keyword matching with cosine similarity thresholds
 - ~~User settings page~~ `/settings` page for profile (avatar, username) and AI agent configuration (framework, personality, wants, willing_to_trade, model selection)
 - ~~DB-backed preferences~~ `profiles.agent_preferences` jsonb column, loaded by agents with seed-data.json fallback
 - ~~Avatars storage~~ `avatars` Supabase Storage bucket with RLS

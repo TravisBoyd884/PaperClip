@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
 import { validateAgentKey, extractBearerToken } from "@/lib/agent-auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 import * as trading from "@/lib/trading";
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import type { ServerRequest, ServerNotification } from "@modelcontextprotocol/sdk/types.js";
@@ -46,11 +47,27 @@ function createPaperClipMcpServer() {
       max_value: z.number().optional().describe("Maximum estimated value in dollars"),
     },
   }, async (args, extra) => {
-    const result = await trading.getSwipeFeed(getUserId(extra), args.swiper_woo_id, {
+    const userId = getUserId(extra);
+
+    let wantsEmbedding: number[] | undefined;
+    try {
+      const admin = createAdminClient();
+      const { data: profile } = await admin
+        .from("profiles")
+        .select("preference_embedding")
+        .eq("id", userId)
+        .single();
+      if (profile?.preference_embedding) {
+        wantsEmbedding = profile.preference_embedding as unknown as number[];
+      }
+    } catch {}
+
+    const result = await trading.getSwipeFeed(userId, args.swiper_woo_id, {
       category: args.category,
       condition: args.condition,
       minValue: args.min_value,
       maxValue: args.max_value,
+      wantsEmbedding,
     }, args.limit ?? 20);
     return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
   });

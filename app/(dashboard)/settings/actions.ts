@@ -2,6 +2,11 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import {
+  generateEmbedding,
+  buildPreferenceEmbeddingText,
+  storePreferenceEmbedding,
+} from "@/lib/embeddings";
 
 export async function updateProfile(username: string, avatarUrl: string | null) {
   const supabase = await createClient();
@@ -104,6 +109,12 @@ export async function updateAgentConfig(
   if (error) {
     return { error: error.message };
   }
+
+  generateEmbedding(buildPreferenceEmbeddingText(preferences))
+    .then((emb) => {
+      if (emb) storePreferenceEmbedding(user.id, emb);
+    })
+    .catch(() => {});
 
   revalidatePath("/settings");
   return { success: true };

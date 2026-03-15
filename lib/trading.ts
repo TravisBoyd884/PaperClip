@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { vectorToSql } from "@/lib/embeddings";
 
 export type FeedWoo = {
   id: string;
@@ -12,6 +13,7 @@ export type FeedWoo = {
   owner_username: string | null;
   owner_avatar_url: string | null;
   owner_is_agent: boolean;
+  similarity_score: number | null;
 };
 
 export type SwipeFilters = {
@@ -21,6 +23,7 @@ export type SwipeFilters = {
   maxValue?: number;
   nameSearch?: string;
   swiperValue?: number;
+  wantsEmbedding?: number[];
 };
 
 export type MatchWoo = {
@@ -217,7 +220,8 @@ export async function getSwipeFeed(
   limit = 20
 ): Promise<{ data: FeedWoo[]; error?: string }> {
   const admin = getAdmin();
-  const { data, error } = await admin.rpc("get_swipe_feed", {
+
+  const rpcParams: Record<string, unknown> = {
     p_user_id: userId,
     p_swiper_woo_id: swiperWooId,
     p_limit: limit,
@@ -227,7 +231,12 @@ export async function getSwipeFeed(
     p_max_value: filters?.maxValue ?? null,
     p_name_search: filters?.nameSearch ?? null,
     p_swiper_value: filters?.swiperValue ?? null,
-  });
+    p_wants_embedding: filters?.wantsEmbedding
+      ? vectorToSql(filters.wantsEmbedding)
+      : null,
+  };
+
+  const { data, error } = await admin.rpc("get_swipe_feed", rpcParams);
 
   if (error) return { data: [], error: error.message };
 
@@ -244,6 +253,7 @@ export async function getSwipeFeed(
       owner_username: row.owner_username as string | null,
       owner_avatar_url: row.owner_avatar_url as string | null,
       owner_is_agent: row.owner_is_agent as boolean,
+      similarity_score: (row.similarity_score as number) ?? null,
     })),
   };
 }

@@ -10,6 +10,9 @@ const INTER_AGENT_DELAY = 200;
 const MAX_CHAT_MESSAGES_BEFORE_AUTO_PROPOSE = 4;
 const BATCH_SIZE = 3;
 
+const SIMILARITY_RIGHT_THRESHOLD = 0.75;
+const SIMILARITY_LEFT_THRESHOLD = 0.3;
+
 interface AgentState {
   config: AgentConfig;
   context: BrowserContext;
@@ -34,6 +37,51 @@ async function wait(ms: number) {
 function keywordMatch(text: string, keywords: string[]): boolean {
   const lower = text.toLowerCase();
   return keywords.some((kw) => lower.includes(kw.toLowerCase()));
+}
+
+function computeSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length) return 0;
+  let dot = 0;
+  let magA = 0;
+  let magB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    magA += a[i] * a[i];
+    magB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(magA) * Math.sqrt(magB);
+  return denom === 0 ? 0 : dot / denom;
+}
+
+async function fetchCardEmbedding(cardInfo: WooInfo): Promise<number[] | null> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+
+  const parts = [cardInfo.title];
+  if (cardInfo.description) parts.push(cardInfo.description);
+  if (cardInfo.category) parts.push(`Category: ${cardInfo.category}`);
+  if (cardInfo.condition) parts.push(`Condition: ${cardInfo.condition}`);
+  const text = parts.join(". ");
+
+  try {
+    const res = await fetch("https://api.openai.com/v1/embeddings", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "text-embedding-3-small",
+        input: text,
+        dimensions: 1536,
+      }),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.data?.[0]?.embedding ?? null;
+  } catch {
+    return null;
+  }
 }
 
 async function initAgent(
@@ -69,6 +117,7 @@ async function initAgent(
 
 async function doSwipePhase(agent: AgentState, appUrl: string): Promise<void> {
   const { page, config } = agent;
+  const prefEmbedding = config.preferenceEmbedding;
 
   if (!(await browser.isOnPage(page, "/swipe"))) {
     await browser.navigateToSwipe(page, appUrl);
@@ -94,7 +143,6 @@ async function doSwipePhase(agent: AgentState, appUrl: string): Promise<void> {
     trade_count: 0,
   };
 
-  // Collect cards for batched swipe decisions
   const pendingCards: { info: WooInfo }[] = [];
 
   for (let i = 0; i < SWIPES_PER_ROUND; i++) {
@@ -112,31 +160,60 @@ async function doSwipePhase(agent: AgentState, appUrl: string): Promise<void> {
       continue;
     }
 
-    const cardText = `${cardInfo.title} ${cardInfo.description ?? ""} ${cardInfo.category}`;
+    // --- Embedding similarity pre-filtering (preferred over keywords) ---
+    if (prefEmbedding) {
+      const cardEmbedding = await fetchCardEmbedding(cardInfo);
+      if (cardEmbedding) {
+        const similarity = computeSimilarity(prefEmbedding, cardEmbedding);
 
-    // Keyword pre-filtering: skip LLM for clear matches/mismatches
-    if (keywordMatch(cardText, config.preferences.wants)) {
-      log(agent, `KEYWORD RIGHT on "${cardInfo.title}" (matches wants)`);
-      await browser.clickSwipe(page, "right");
-      agent.swipesDone++;
-      const matched = await browser.checkMatchModal(page);
-      if (matched) log(agent, "Match found!");
-      await wait(INTER_ACTION_DELAY);
-      continue;
+        if (similarity >= SIMILARITY_RIGHT_THRESHOLD) {
+          log(agent, `EMBED RIGHT on "${cardInfo.title}" (similarity=${similarity.toFixed(3)})`);
+          await browser.clickSwipe(page, "right");
+          agent.swipesDone++;
+          const matched = await browser.checkMatchModal(page);
+          if (matched) log(agent, "Match found!");
+          await wait(INTER_ACTION_DELAY);
+          continue;
+        }
+
+        if (similarity <= SIMILARITY_LEFT_THRESHOLD) {
+          log(agent, `EMBED LEFT on "${cardInfo.title}" (similarity=${similarity.toFixed(3)})`);
+          await browser.clickSwipe(page, "left");
+          agent.swipesDone++;
+          await wait(INTER_ACTION_DELAY);
+          continue;
+        }
+
+        log(agent, `EMBED AMBIGUOUS on "${cardInfo.title}" (similarity=${similarity.toFixed(3)}) → LLM`);
+      }
     }
 
-    if (keywordMatch(cardText, config.preferences.willing_to_trade)) {
-      log(agent, `KEYWORD LEFT on "${cardInfo.title}" (matches willing_to_trade)`);
-      await browser.clickSwipe(page, "left");
-      agent.swipesDone++;
-      await wait(INTER_ACTION_DELAY);
-      continue;
+    // --- Keyword fallback when embeddings unavailable ---
+    if (!prefEmbedding) {
+      const cardText = `${cardInfo.title} ${cardInfo.description ?? ""} ${cardInfo.category}`;
+
+      if (keywordMatch(cardText, config.preferences.wants)) {
+        log(agent, `KEYWORD RIGHT on "${cardInfo.title}" (matches wants)`);
+        await browser.clickSwipe(page, "right");
+        agent.swipesDone++;
+        const matched = await browser.checkMatchModal(page);
+        if (matched) log(agent, "Match found!");
+        await wait(INTER_ACTION_DELAY);
+        continue;
+      }
+
+      if (keywordMatch(cardText, config.preferences.willing_to_trade)) {
+        log(agent, `KEYWORD LEFT on "${cardInfo.title}" (matches willing_to_trade)`);
+        await browser.clickSwipe(page, "left");
+        agent.swipesDone++;
+        await wait(INTER_ACTION_DELAY);
+        continue;
+      }
     }
 
     // Ambiguous — collect for batched LLM decision
     pendingCards.push({ info: cardInfo });
 
-    // Process batch when full or last card in round
     if (pendingCards.length >= BATCH_SIZE || i === SWIPES_PER_ROUND - 1) {
       try {
         let decisions: ("left" | "right")[];
@@ -151,24 +228,6 @@ async function doSwipePhase(agent: AgentState, appUrl: string): Promise<void> {
           );
         }
 
-        // We already swiped past the earlier cards in the batch via the UI,
-        // so only the current card on screen needs swiping.
-        // For batched swipes, we need to swipe each in sequence.
-        // The first card in pendingCards is already on screen from when we read it.
-        // But we already moved past previous cards... Actually, the cards in pending
-        // were each read but NOT swiped yet. We paused before swiping to batch.
-        // Wait — the issue is we can only swipe one at a time on the UI.
-        // Let me reconsider: we read the card, decided to defer, but the card is still
-        // showing. For batching to work, we need to read multiple cards first, but
-        // we can't see the next card until we swipe the current one. So batching
-        // only works when we read one card, swipe it, then read the next, etc.
-        // The batch LLM call happens before swiping, but we've only read the current card.
-        // So realistically, in a UI-driven agent, batching is: read current card ->
-        // decide with LLM (using batch of 1 in practice). The real batching benefit
-        // would be if we could preview multiple cards, which we can't.
-        //
-        // Given this constraint, fall back to single-card decisions using the first
-        // pending card's decision for the card currently on screen.
         const decision = decisions[0];
         const card = pendingCards[0];
         log(agent, `${decision.toUpperCase()} on "${card.info.title}" ($${card.info.estimated_value ?? "?"})`);
@@ -217,6 +276,7 @@ async function doMatchesPhase(agent: AgentState, appUrl: string): Promise<void> 
 
 async function doChatPhase(agent: AgentState, appUrl: string): Promise<void> {
   const { page, config } = agent;
+  const prefEmbedding = config.preferenceEmbedding;
 
   if (!agent.currentMatchId) {
     agent.phase = "swipe";
@@ -242,7 +302,23 @@ async function doChatPhase(agent: AgentState, appUrl: string): Promise<void> {
     const myWoo = agent.myWoo ?? wooInfo.myWoo;
     const theirWoo = wooInfo.theirWoo;
 
-    // Auto-approve: if we receive items matching our wants AND give up items matching willing_to_trade
+    // Try embedding-based auto-approve first
+    if (prefEmbedding) {
+      const theirEmbedding = await fetchCardEmbedding(theirWoo);
+      if (theirEmbedding) {
+        const similarity = computeSimilarity(prefEmbedding, theirEmbedding);
+        if (similarity >= SIMILARITY_RIGHT_THRESHOLD) {
+          log(agent, `Auto-approving trade (embedding similarity=${similarity.toFixed(3)})`);
+          await browser.clickApproveTrade(page);
+          await wait(INTER_ACTION_DELAY);
+          agent.currentMatchId = null;
+          agent.phase = "matches";
+          return;
+        }
+      }
+    }
+
+    // Keyword-based auto-approve fallback
     const receivedText = `${theirWoo.title} ${theirWoo.description ?? ""} ${theirWoo.category}`;
     const givingText = `${myWoo.title} ${myWoo.description ?? ""} ${myWoo.category}`;
 
@@ -267,7 +343,6 @@ async function doChatPhase(agent: AgentState, appUrl: string): Promise<void> {
       return;
     }
 
-    // Fall through to LLM for ambiguous cases
     try {
       const shouldApprove = await config.llm.decideTrade({
         myWoos: [myWoo],
@@ -386,6 +461,7 @@ async function main() {
       console.log(`  ${cfg.llm.name} preferences:`);
       console.log(`    Wants: ${cfg.preferences.wants.join(", ")}`);
       console.log(`    Willing to trade: ${cfg.preferences.willing_to_trade.join(", ")}`);
+      console.log(`    Embedding: ${cfg.preferenceEmbedding ? "loaded" : "none (keyword fallback)"}`);
     }
   }
 

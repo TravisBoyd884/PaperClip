@@ -3,6 +3,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import {
+  generateEmbedding,
+  buildWooEmbeddingText,
+  storeWooEmbedding,
+} from "@/lib/embeddings";
 
 async function requireWarehouseStaff() {
   const supabase = await createClient();
@@ -82,15 +87,30 @@ export async function verifyItem(itemId: string) {
 
 export async function mintWoo(itemId: string) {
   const { admin, warehouseIds } = await requireWarehouseStaff();
-  await requireItemInWarehouse(admin, itemId, warehouseIds);
+  const item = await requireItemInWarehouse(admin, itemId, warehouseIds);
 
   const { data, error } = await admin.rpc("mint_woo", {
     p_item_id: itemId,
   });
 
   if (error) return { error: error.message };
+
+  const wooId = data as string;
+  generateEmbedding(
+    buildWooEmbeddingText({
+      title: item.name,
+      description: item.description,
+      category: item.category,
+      condition: item.condition,
+    })
+  )
+    .then((emb) => {
+      if (emb) storeWooEmbedding(wooId, emb);
+    })
+    .catch(() => {});
+
   revalidatePath("/admin/warehouse");
-  return { success: true, wooId: data };
+  return { success: true, wooId };
 }
 
 // ─── Cash Out Actions ────────────────────────────────────────────────────────

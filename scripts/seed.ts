@@ -1,8 +1,11 @@
 import "dotenv/config";
+import { config } from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import { createHash, randomBytes } from "crypto";
+
+config({ path: resolve(process.cwd(), ".agents.env") });
 
 const WAREHOUSE_ID = "a1b2c3d4-0001-4000-8000-000000000001";
 
@@ -15,17 +18,81 @@ interface SeedItem {
   image_url?: string;
 }
 
+interface SeedPreferences {
+  wants: string[];
+  willing_to_trade: string[];
+  personality: string;
+}
+
 interface DemoUser {
   email: string;
   password: string;
   username: string;
   agent_framework: string;
   agent_description: string;
+  preferences?: SeedPreferences;
 }
 
 interface SeedData {
   item_groups: { label: string; items: SeedItem[] }[];
   demo_users?: DemoUser[];
+}
+
+async function fetchEmbedding(text: string): Promise<number[] | null> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const res = await fetch("https://api.openai.com/v1/embeddings", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "text-embedding-3-small",
+        input: text,
+        dimensions: 1536,
+      }),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.data?.[0]?.embedding ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchEmbeddingsBatch(texts: string[]): Promise<(number[] | null)[]> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return texts.map(() => null);
+
+  try {
+    const res = await fetch("https://api.openai.com/v1/embeddings", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "text-embedding-3-small",
+        input: texts,
+        dimensions: 1536,
+      }),
+    });
+    if (!res.ok) return texts.map(() => null);
+    const json = await res.json();
+    const sorted = [...json.data].sort(
+      (a: { index: number }, b: { index: number }) => a.index - b.index
+    );
+    return sorted.map((d: { embedding: number[] }) => d.embedding);
+  } catch {
+    return texts.map(() => null);
+  }
+}
+
+function vectorToSql(embedding: number[]): string {
+  return `[${embedding.join(",")}]`;
 }
 
 function itemUuid(userUuid: string, index: number): string {
@@ -338,7 +405,72 @@ async function main() {
     await createAgentKeys(supabase, users);
   }
 
-  console.log("--- Seed Complete ---");
+  // --- Generate embeddings for seeded Woos and preferences ---
+  if (!process.env.OPENAI_API_KEY) {
+    console.log("\nSkipping embedding generation (OPENAI_API_KEY not set)");
+  } else {
+    console.log(`\nGenerating embeddings for ${totalItems} Woo(s)...`);
+
+    const wooTexts: string[] = [];
+    const wooIds: string[] = [];
+    for (let g = 0; g < pairCount; g++) {
+      const userId = users[g].id;
+      const items = seedData.item_groups[g].items;
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const parts = [item.name];
+        if (item.description) parts.push(item.description);
+        if (item.category) parts.push(`Category: ${item.category}`);
+        if (item.condition) parts.push(`Condition: ${item.condition}`);
+        wooTexts.push(parts.join(". "));
+        wooIds.push(wooUuid(userId, i));
+      }
+    }
+
+    const BATCH_SIZE = 20;
+    let embeddedWoos = 0;
+    for (let b = 0; b < wooTexts.length; b += BATCH_SIZE) {
+      const batchTexts = wooTexts.slice(b, b + BATCH_SIZE);
+      const batchIds = wooIds.slice(b, b + BATCH_SIZE);
+      const embeddings = await fetchEmbeddingsBatch(batchTexts);
+      for (let j = 0; j < batchIds.length; j++) {
+        if (embeddings[j]) {
+          await supabase
+            .from("woos")
+            .update({ embedding: vectorToSql(embeddings[j]!) } as Record<string, unknown>)
+            .eq("id", batchIds[j]);
+          embeddedWoos++;
+        }
+      }
+    }
+    console.log(`  Embedded ${embeddedWoos}/${totalItems} Woo(s)`);
+
+    if (createDemoUsers && seedData.demo_users) {
+      console.log(`Generating preference embeddings for ${pairCount} user(s)...`);
+      let embeddedPrefs = 0;
+      for (let g = 0; g < pairCount; g++) {
+        const demoUser = seedData.demo_users[g];
+        if (!demoUser?.preferences) continue;
+        const prefs = demoUser.preferences;
+        const parts: string[] = [];
+        if (prefs.wants?.length) parts.push(`Wants: ${prefs.wants.join(", ")}`);
+        if (prefs.willing_to_trade?.length) parts.push(`Willing to trade: ${prefs.willing_to_trade.join(", ")}`);
+        if (prefs.personality) parts.push(prefs.personality);
+        const text = parts.join(". ");
+        const emb = await fetchEmbedding(text);
+        if (emb) {
+          await supabase
+            .from("profiles")
+            .update({ preference_embedding: vectorToSql(emb) } as Record<string, unknown>)
+            .eq("id", users[g].id);
+          embeddedPrefs++;
+        }
+      }
+      console.log(`  Embedded ${embeddedPrefs}/${pairCount} preference profile(s)`);
+    }
+  }
+
+  console.log("\n--- Seed Complete ---");
   console.log(`Profiles seeded: ${pairCount}`);
   console.log(`Items seeded:    ${totalItems}`);
   console.log(`Woos minted:     ${totalItems}`);
