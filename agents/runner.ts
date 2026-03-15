@@ -1,12 +1,37 @@
+import { execSync } from "child_process";
 import { chromium, type BrowserContext, type Page } from "playwright";
 import { loadAgentConfigs, getAppUrl, type AgentConfig } from "./config.js";
 import type { WooInfo, ChatContext } from "./llm-adapter.js";
 import * as browser from "./browser-agent.js";
 
+function getScreenSize(): { width: number; height: number } {
+  try {
+    if (process.platform === "win32") {
+      const out = execSync(
+        'powershell -NoProfile -Command "Get-CimInstance Win32_VideoController | Select-Object -First 1 CurrentHorizontalResolution,CurrentVerticalResolution | ForEach-Object { \\"$($_.CurrentHorizontalResolution),$($_.CurrentVerticalResolution)\\" }"',
+        { encoding: "utf-8" }
+      );
+      const [w, h] = out.trim().split(",").map((s) => parseInt(s, 10));
+      if (w > 0 && h > 0) return { width: w, height: h };
+    } else if (process.platform === "darwin") {
+      const out = execSync(
+        "system_profiler SPDisplaysDataType | grep Resolution",
+        { encoding: "utf-8" }
+      );
+      const match = out.match(/(\d{3,5})\s*x\s*(\d{3,5})/);
+      if (match) return { width: parseInt(match[1], 10), height: parseInt(match[2], 10) };
+    } else {
+      const out = execSync("xdpyinfo | grep dimensions", { encoding: "utf-8" });
+      const match = out.match(/(\d{3,5})x(\d{3,5})/);
+      if (match) return { width: parseInt(match[1], 10), height: parseInt(match[2], 10) };
+    }
+  } catch {}
+  return { width: 1920, height: 1080 };
+}
+
 const MAX_ROUNDS = 20;
-const SWIPES_PER_ROUND = 3;
+const SWIPES_PER_ROUND = 20;
 const INTER_ACTION_DELAY = 150;
-const INTER_AGENT_DELAY = 200;
 const MAX_CHAT_MESSAGES_BEFORE_AUTO_PROPOSE = 4;
 const BATCH_SIZE = 3;
 
@@ -27,7 +52,8 @@ interface AgentState {
 
 function log(agent: AgentState, msg: string) {
   const name = agent.config.llm.name.padEnd(6);
-  console.log(`[${name}] ${msg}`);
+  const ts = new Date().toLocaleTimeString("en-US", { hour12: false });
+  console.log(`[${ts}] [${name}] ${msg}`);
 }
 
 async function wait(ms: number) {
@@ -87,18 +113,22 @@ async function fetchCardEmbedding(cardInfo: WooInfo): Promise<number[] | null> {
 async function initAgent(
   config: AgentConfig,
   appUrl: string,
-  index: number
+  index: number,
+  screen: { width: number; height: number }
 ): Promise<AgentState> {
+  const halfW = Math.floor(screen.width / 2);
+  const halfH = Math.floor(screen.height / 2);
+
   const browserInstance = await chromium.launch({
     headless: false,
     args: [
-      `--window-position=${(index % 2) * 800},${Math.floor(index / 2) * 500}`,
-      "--window-size=780,480",
+      `--window-position=${(index % 2) * halfW},${Math.floor(index / 2) * halfH}`,
+      `--window-size=${halfW},${halfH}`,
     ],
   });
 
   const context = await browserInstance.newContext({
-    viewport: { width: 780, height: 480 },
+    viewport: { width: halfW, height: halfH - 80 },
   });
   const page = await context.newPage();
 
@@ -425,10 +455,9 @@ async function runRound(agents: AgentState[], appUrl: string, round: number) {
   console.log(`ROUND ${round + 1}`);
   console.log(`${"=".repeat(50)}\n`);
 
-  for (const agent of agents) {
-    console.log(`\n--- ${agent.config.llm.name}'s turn (phase: ${agent.phase}) ---`);
-
-    try {
+  const results = await Promise.allSettled(
+    agents.map(async (agent) => {
+      log(agent, `Starting phase: ${agent.phase}`);
       switch (agent.phase) {
         case "swipe":
           await doSwipePhase(agent, appUrl);
@@ -440,12 +469,14 @@ async function runRound(agents: AgentState[], appUrl: string, round: number) {
           await doChatPhase(agent, appUrl);
           break;
       }
-    } catch (err) {
-      log(agent, `Error in ${agent.phase} phase: ${err}`);
-      agent.phase = "swipe";
-    }
+    })
+  );
 
-    await wait(INTER_AGENT_DELAY);
+  for (let i = 0; i < results.length; i++) {
+    if (results[i].status === "rejected") {
+      log(agents[i], `Error in ${agents[i].phase} phase: ${(results[i] as PromiseRejectedResult).reason}`);
+      agents[i].phase = "swipe";
+    }
   }
 }
 
@@ -465,23 +496,28 @@ async function main() {
     }
   }
 
-  console.log(`\nInitializing ${configs.length} browser(s)...\n`);
+  const screen = getScreenSize();
+  console.log(`\nScreen: ${screen.width}x${screen.height} — each browser: ${Math.floor(screen.width / 2)}x${Math.floor(screen.height / 2)}`);
+  console.log(`Initializing ${configs.length} browser(s) in parallel...\n`);
 
-  const agents: AgentState[] = [];
-  for (let i = 0; i < configs.length; i++) {
-    const agent = await initAgent(configs[i], appUrl, i);
-    agents.push(agent);
+  const agents = await Promise.all(
+    configs.map((cfg, i) => initAgent(cfg, appUrl, i, screen))
+  );
+  for (let i = 0; i < agents.length; i++) {
     console.log(`Browser ${i + 1} ready for ${configs[i].llm.name}`);
   }
 
-  console.log("\nLogging in all agents...\n");
-  for (const agent of agents) {
-    try {
+  console.log("\nLogging in all agents in parallel...\n");
+  const loginResults = await Promise.allSettled(
+    agents.map(async (agent) => {
       log(agent, `Logging in as ${agent.config.email}...`);
       await browser.login(agent.page, appUrl, agent.config.email, agent.config.password);
       log(agent, "Logged in successfully");
-    } catch (err) {
-      log(agent, `Login failed: ${err}`);
+    })
+  );
+  for (let i = 0; i < loginResults.length; i++) {
+    if (loginResults[i].status === "rejected") {
+      log(agents[i], `Login failed: ${(loginResults[i] as PromiseRejectedResult).reason}`);
     }
   }
 

@@ -30,7 +30,7 @@ returns table (
   similarity float8
 )
 language plpgsql
-security definer set search_path = ''
+security definer set search_path = 'extensions'
 as $$
 begin
   return query
@@ -83,7 +83,7 @@ returns table (
   similarity_score float8
 )
 language plpgsql
-security definer set search_path = ''
+security definer set search_path = 'extensions'
 as $$
 begin
   return query

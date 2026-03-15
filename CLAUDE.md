@@ -924,7 +924,7 @@ paperclip/
 │   ├── seed-data.json              # Themed seed items (Pokemon, MTG, sports, electronics) with real images and user preferences
 │   └── seed.sql                    # Seed data (warehouses)
 ├── agents/
-│   ├── runner.ts                  # Main orchestrator: launches browsers, round-robin trading, embedding similarity + keyword fallback, auto-approve
+│   ├── runner.ts                  # Main orchestrator: launches browsers in parallel, auto-detected quarter-screen layout, concurrent trading rounds, embedding similarity + keyword fallback, auto-approve
 │   ├── config.ts                  # Agent configuration: DB preferences + embeddings -> seed-data.json fallback, tiered model selection
 │   ├── llm-adapter.ts             # Common LLM interface + split system/user prompt builders (compact + full preferences)
 │   ├── browser-agent.ts           # Playwright page interaction helpers (DOM reading for Woos, chat, trade state)
@@ -1037,7 +1037,7 @@ Running `pnpm seed:demo` (equivalent to `tsx scripts/seed.ts --create-users`) do
 
 ## 15. Agent Demo
 
-The agent demo launches 4 browser windows, each logged into a different PaperClip user, with a different LLM model making trading decisions. The orchestrator round-robins through each agent, performing swipes, chatting, and executing trades visually. Each agent is driven by **subject value preferences** — personal interests that determine which items they want and which they're willing to trade away.
+The agent demo launches 4 browser windows in parallel, each occupying one quarter of the screen and logged into a different PaperClip user with a different LLM model making trading decisions. All agents run simultaneously — browser initialization, login, and each trading round execute in parallel via `Promise.allSettled`. Screen resolution is auto-detected at runtime (`getScreenSize()`) to dynamically size and position windows. Each agent is driven by **subject value preferences** — personal interests that determine which items they want and which they're willing to trade away.
 
 ### 15.1 Architecture
 
@@ -1050,11 +1050,13 @@ Agent Runner (agents/runner.ts)
 ```
 
 Each agent has:
-- A Playwright browser instance (headful, positioned in a 2x2 grid)
+- A Playwright browser instance (headful, auto-sized to one screen quarter via `getScreenSize()`)
 - An LLM adapter that implements `decideSwipe()`, `decideBatchSwipe()`, `generateMessage()`, and `decideTrade()`
 - A phase state machine: swipe -> matches -> chat -> repeat
 - **Subject value preferences** loaded from DB (with seed-data.json fallback) and injected into all LLM prompts
 - **Tiered models**: cheap classification model for swipe/trade, smarter generation model for chat
+
+All 4 agents execute their phases in parallel each round via `Promise.allSettled`. Browsers are initialized and logged in concurrently. Log output includes timestamps (`[HH:MM:SS]`) for readability with interleaved parallel output.
 
 ### 15.2 Subject Value and Preference-Driven Trading
 
@@ -1168,7 +1170,7 @@ All methods receive the agent's `AgentPreferences` and use split system/user pro
 - ~~MCP server with all trading tools~~ Implemented at `app/api/mcp/route.ts` with 9 tools
 - ~~OpenClaw skill~~ Implemented at `openclaw-skill/` with manifest, strategy, and README
 - ~~Core trading logic extraction~~ `lib/trading.ts` with shared business logic used by both server actions and MCP
-- ~~Browser automation demo~~ `agents/` with Playwright runner, 4 LLM adapters (Claude, GPT, Gemini, Groq/Llama)
+- ~~Browser automation demo~~ `agents/` with Playwright runner (parallel execution, auto-detected quarter-screen layout), 4 LLM adapters (Claude, GPT, Gemini, Groq/Llama)
 - ~~Subject value preferences~~ Agents load per-user preferences from `seed-data.json` and inject them into all LLM prompts (swipe, chat, trade)
 - ~~Chat-driven trade proposals~~ Agents read chat messages from the DOM, pass full context to the LLM, and only propose trades when the LLM signals readiness (or after 4+ messages as fallback)
 - ~~Real Woo/chat DOM reading~~ Agents read actual Woo info (title, value) and chat messages from the page instead of using placeholders
