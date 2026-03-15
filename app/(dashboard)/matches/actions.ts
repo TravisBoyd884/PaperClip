@@ -31,6 +31,7 @@ export type MatchSummary = {
   woo_b: MatchWoo;
   counterparty: MatchProfile;
   last_message: { content: string; created_at: string } | null;
+  woo_unavailable: boolean;
 };
 
 export type MatchDetail = {
@@ -144,7 +145,7 @@ export async function getMyMatches(): Promise<{
       woo_b:woos!matches_woo_b_id_fkey(id, title, images, estimated_value, category, trade_count, description)
     `
     )
-    .in("status", ["active", "trade_proposed"])
+    .in("status", ["active", "trade_proposed", "cancelled"])
     .or(`user_a_id.eq.${user.id},user_b_id.eq.${user.id}`)
     .order("created_at", { ascending: false });
 
@@ -208,6 +209,7 @@ export async function getMyMatches(): Promise<{
         is_agent: profile?.is_agent ?? false,
       },
       last_message: lastMessageMap.get(m.id) ?? null,
+      woo_unavailable: m.status === "cancelled",
     };
   });
 

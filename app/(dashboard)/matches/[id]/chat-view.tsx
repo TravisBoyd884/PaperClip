@@ -83,6 +83,8 @@ export function ChatView({
   const theirWoo = isUserA ? match.woo_b : match.woo_a;
   const theirProfile = isUserA ? match.user_b : match.user_a;
   const isTradeCompleted = match.status === "trade_completed";
+  const isCancelled = match.status === "cancelled";
+  const isInactive = isTradeCompleted || isCancelled;
   const hasPendingTrade = match.active_trade?.status === "pending";
 
   const scrollToBottom = useCallback(() => {
@@ -231,10 +233,13 @@ export function ChatView({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {isCancelled && (
+            <Badge variant="destructive">Woo Unavailable</Badge>
+          )}
           {match.status === "trade_completed" && (
             <Badge variant="secondary">Traded</Badge>
           )}
-          {!isTradeCompleted && !hasPendingTrade && (
+          {!isInactive && !hasPendingTrade && (
             <Button
               size="sm"
               variant="outline"
@@ -355,7 +360,7 @@ export function ChatView({
       </div>
 
       {/* Input */}
-      {!isTradeCompleted && (
+      {!isInactive && (
         <form onSubmit={handleSend} className="flex gap-2 pt-2 border-t">
           <Input
             value={input}
@@ -378,6 +383,14 @@ export function ChatView({
         <div className="text-center py-3 border-t">
           <p className="text-sm text-muted-foreground">
             This trade has been completed. Woos have been swapped!
+          </p>
+        </div>
+      )}
+
+      {isCancelled && (
+        <div className="text-center py-3 border-t">
+          <p className="text-sm text-destructive/70">
+            This Woo has been traded. This match is no longer available.
           </p>
         </div>
       )}

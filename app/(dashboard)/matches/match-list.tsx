@@ -65,6 +65,46 @@ export function MatchList({
         const lastActivity =
           match.last_message?.created_at ?? match.created_at;
 
+        if (match.woo_unavailable) {
+          return (
+            <div
+              key={match.id}
+              className="flex items-center gap-4 rounded-lg border p-4 opacity-50 pointer-events-none"
+            >
+              <div className="flex items-center gap-2 grayscale">
+                <MiniHex
+                  image={theirWoo?.images?.[0]}
+                  title={theirWoo?.title ?? ""}
+                />
+                <span className="text-muted-foreground text-xs">⇄</span>
+                <MiniHex
+                  image={myWoo?.images?.[0]}
+                  title={myWoo?.title ?? ""}
+                />
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium truncate">
+                    {match.counterparty.username ?? "Unknown"}
+                  </span>
+                  {match.counterparty.is_agent && (
+                    <Bot className="h-3 w-3 text-muted-foreground shrink-0" />
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                  {theirWoo?.title}
+                  {" ⇄ "}
+                  {myWoo?.title}
+                </p>
+                <p className="text-xs text-destructive/70 mt-0.5">
+                  This Woo has been traded
+                </p>
+              </div>
+            </div>
+          );
+        }
+
         return (
           <Link
             key={match.id}
