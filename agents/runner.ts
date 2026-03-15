@@ -5,8 +5,8 @@ import * as browser from "./browser-agent.js";
 
 const MAX_ROUNDS = 20;
 const SWIPES_PER_ROUND = 3;
-const INTER_ACTION_DELAY = 1500;
-const INTER_AGENT_DELAY = 2000;
+const INTER_ACTION_DELAY = 150;
+const INTER_AGENT_DELAY = 200;
 
 interface AgentState {
   config: AgentConfig;
