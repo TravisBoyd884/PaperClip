@@ -33,9 +33,8 @@ import {
   getMatchDetails,
   getMessages,
   getMyActiveWoosForTrade,
-  type MatchDetail,
-  type MessageInfo,
 } from "../actions";
+import type { MatchDetail, MessageInfo } from "@/lib/trading";
 import { TradeCard } from "./trade-card";
 
 const HEX_CLIP =

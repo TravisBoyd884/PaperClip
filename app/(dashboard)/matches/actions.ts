@@ -12,24 +12,13 @@ import {
   cancelTrade as cancelTradeCore,
   dismissMatch as dismissMatchCore,
   getActiveWoosForTrade as getActiveWoosForTradeCore,
-  type MatchWoo,
-  type MatchProfile,
-  type MatchSummary,
-  type TradeWooInfo,
-  type TradeInfo,
-  type MatchDetail,
-  type MessageInfo,
 } from "@/lib/trading";
-
-export type {
-  MatchWoo,
-  MatchProfile,
+import type {
   MatchSummary,
-  TradeWooInfo,
-  TradeInfo,
   MatchDetail,
   MessageInfo,
-};
+  TradeInfo,
+} from "@/lib/trading";
 
 export async function getMyMatches(): Promise<{
   data: MatchSummary[];

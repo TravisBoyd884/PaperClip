@@ -29,12 +29,8 @@ import {
 import { toast } from "sonner";
 import { SwipeCard, type SwipeDirection } from "./swipe-card";
 import { MatchModal } from "./match-modal";
-import {
-  getSwipeFeed,
-  recordSwipe,
-  type FeedWoo,
-  type SwipeFilters,
-} from "./actions";
+import { getSwipeFeed, recordSwipe } from "./actions";
+import type { FeedWoo, SwipeFilters } from "@/lib/trading";
 
 const HEX_CLIP =
   "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)";

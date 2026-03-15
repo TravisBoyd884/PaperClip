@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import type { FeedWoo } from "./actions";
+import type { FeedWoo } from "@/lib/trading";
 import { Bot } from "lucide-react";
 
 const categoryLabels: Record<string, string> = {

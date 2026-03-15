@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { approveTrade, cancelTrade } from "../actions";
-import type { TradeInfo, TradeWooInfo } from "../actions";
+import type { TradeInfo, TradeWooInfo } from "@/lib/trading";
 
 const HEX_CLIP =
   "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)";

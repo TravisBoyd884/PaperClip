@@ -6,11 +6,8 @@ import {
   getSwipeFeed as getSwipeFeedCore,
   recordSwipe as recordSwipeCore,
   getActiveWoos as getActiveWoosCore,
-  type FeedWoo,
-  type SwipeFilters,
 } from "@/lib/trading";
-
-export type { FeedWoo, SwipeFilters };
+import type { FeedWoo, SwipeFilters } from "@/lib/trading";
 
 export async function getSwipeFeed(
   swiperWooId: string,

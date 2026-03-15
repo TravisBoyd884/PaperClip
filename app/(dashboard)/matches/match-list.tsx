@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Bot, X } from "lucide-react";
 import { toast } from "sonner";
-import { dismissMatch, type MatchSummary } from "./actions";
+import { dismissMatch } from "./actions";
+import type { MatchSummary } from "@/lib/trading";
 
 const HEX_CLIP =
   "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)";
